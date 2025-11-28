@@ -1,23 +1,23 @@
 # JSON Test Results Generator
 
-This set of scripts analyzes test results from the `allure-results` folder and generates JSON files with test outcomes in a predefined format.
+This set of scripts is designed to analyze test results from the `allure-results` folder and generate JSON files with test results in a predefined format.
 
 ## Files
 
 ### Main Scripts
 
-1. **`calculate-email-notification-variables.sh`** – Main script for calculating test pass rate (shared with the text version)
-2. **`generate-email-notification-json.sh`** – Script for generating JSON files with test results
+1. **`calculate-email-notification-variables.sh`** - Main script for calculating test pass rate (shared with text version)
+2. **`generate-email-notification-json.sh`** - Script for generating JSON file with test results
 
 ## Requirements
 
 - Git Bash (for Windows) or Linux/macOS with bash
 - `jq` (for JSON parsing)
-- `awk` (for calculations and placeholder substitution)
+- `awk` (for calculations and placeholder replacement)
 
 ## Usage
 
-### 1. Generate JSON Results
+### 1. Generating JSON Results
 
 ```bash
 # Using Git Bash on Windows
@@ -30,41 +30,41 @@ This set of scripts analyzes test results from the `allure-results` folder and g
 ### 2. Combined Usage
 
 ```bash
-# First calculate the pass rate
+# First, calculate pass rate
 & "C:\Program Files\Git\bin\bash.exe" email-notification/calculate-email-notification-variables.sh
 
-# Then generate the JSON
+# Then generate JSON
 & "C:\Program Files\Git\bin\bash.exe" email-notification/generate-email-notification-json.sh
 ```
 
 ## Exported Variables
 
-After running `generate-email-notification-json.sh`, these environment variables are available:
+After executing `generate-email-notification-json.sh`, the following environment variables are available:
 
-- `GENERATED_JSON` – Content of the generated JSON file
-- `JSON_FILE` – Path to the generated JSON file
+- `GENERATED_JSON` - Content of the generated JSON file
+- `JSON_FILE` - Path to the JSON results file
 
-## Environment Variables Used
+## Environment Variables
 
-The script uses the following environment variables to generate JSON:
+The script uses the following environment variables for JSON generation:
 
-- `TEST_OVERALL_STATUS` – Overall status
-- `TEST_PASS_RATE` – Pass rate in percent (number)
-- `TEST_PASS_RATE_ROUNDED` – Rounded pass rate (number)
-- `TEST_TOTAL_COUNT` – Total number of tests
-- `TEST_PASSED_COUNT` – Passed tests count
-- `TEST_FAILED_COUNT` – Failed tests count
-- `TEST_SKIPPED_COUNT` – Skipped tests count
-- `TEST_FAILURE_RATE` – Failure percentage
-- `TEST_COVERAGE` – Test coverage
-- `EXECUTION_DATE` – Execution date
-- `ENV_NAME` – Environment name
-- `REPORT_VIEW_HOST_URL` – Report viewer host
-- `ALLURE_REPORT_URL` – Allure report URL
-- `TIMESTAMP` – Timestamp
-- `TEST_DETAILS_STRING` – String with test details (converted to JSON array)
+- `TEST_OVERALL_STATUS` - Overall status
+- `TEST_PASS_RATE` - Pass rate as percentage (number)
+- `TEST_PASS_RATE_ROUNDED` - Rounded pass rate (number)
+- `TEST_TOTAL_COUNT` - Total number of tests
+- `TEST_PASSED_COUNT` - Number of passed tests
+- `TEST_FAILED_COUNT` - Number of failed tests
+- `TEST_SKIPPED_COUNT` - Number of skipped tests
+- `TEST_FAILURE_RATE` - Failure rate percentage
+- `TEST_COVERAGE` - Test coverage
+- `EXECUTION_DATE` - Execution date
+- `ENV_NAME` - Environment name
+- `REPORT_VIEW_HOST_URL` - Host for viewing reports
+- `ALLURE_REPORT_URL` - Path to reports folder
+- `TIMESTAMP` - Timestamp
+- `TEST_DETAILS_STRING` - String with details of all tests (converted to JSON array)
 
-## JSON Output Structure
+## Generated JSON Structure
 
 ```json
 {
@@ -93,9 +93,9 @@ The script uses the following environment variables to generate JSON:
       "emoji": "✅"
     }
   ],
-  "environment_variables": { "token1": "value1", "token2": "value2" },
-  "environment_variables_description": { "token1": "value1", "token2": "value2" },
-  "status_logic": { "token1": "value1", "token2": "value2" }
+  "environment_variables": {},
+  "environment_variables_description": {},
+  "status_logic": {}
 }
 ```
 
@@ -103,12 +103,12 @@ The script uses the following environment variables to generate JSON:
 
 Scripts can be integrated into other bash scripts:
 
-### Option 1: Using the function (recommended)
+### Option 1: Using Function (Recommended)
 
 ```bash
 #!/bin/bash
 
-# Load the script with the function
+# Load script with function
 source ./email-notification/generate-email-notification-json.sh
 
 # Call the function
@@ -121,29 +121,29 @@ echo "$json_content"
 echo "JSON file: $JSON_FILE"
 echo "Content: $GENERATED_JSON"
 
-# The file will be saved in: ../email-notification-generated/email-notification-results-generated.json
+# File will be saved to: ../email-notification-generated/email-notification-results-generated.json
 ```
 
 ### Function Parameters
 
-The `generate_email_notification_json` function takes no parameters.
+The `generate_email_notification_json` function does not accept parameters.
 
-**Note:**
-- The `./allure-results` folder is used by default.
-- The output file is always named `email-notification-results-generated.json` and is saved in the `email-notification-generated` directory one level above the `email-notification` folder.
+**Note:** 
+- Allure results folder is always used by default: `./allure-results`
+- Output file is always named `email-notification-results-generated.json` and saved in the `email-notification-generated` directory one level above the `email-notification` folder.
 
 ### Return Values
 
 The function returns:
-- **Contents of the generated JSON** (output to stdout)
+- **Generated JSON content** (output to stdout)
 - **Environment variable `GENERATED_JSON`** - JSON content
-- **Environment variable `JSON_FILE`** - path to the JSON file
+- **Environment variable `JSON_FILE`** - path to JSON file
 
-## Differences from the Text Version
+## Differences from Text Version
 
-1. **Output Format**: JSON instead of plain text
-2. **Structured Data**: Organized into logical sections
-3. **Test Array**: Each test represented as a JSON object
-4. **Data Types**: Numeric values kept as numbers, not strings
-5. **Metadata**: Includes variable descriptions and status logic
-6. **No Templates**: JSON generated directly, no text templates used
+1. **Output Format**: JSON instead of text
+2. **Structured Data**: All data is organized into logical blocks
+3. **Test Array**: Test details are represented as a JSON array of objects
+4. **Data Types**: Numeric values are passed as numbers, not strings
+5. **Metadata**: Variable descriptions and status logic are included
+6. **No Templates**: JSON is generated directly without using template files
