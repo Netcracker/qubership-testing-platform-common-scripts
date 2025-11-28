@@ -10,7 +10,7 @@ setup_runtime_environment() {
 
     # Copy node_modules from container to temp directory (Bruno-specific)
     echo "🔧 Copying dependencies from container..."
-    cp -r /app/node_modules $TMP_DIR/node_modules
+    cp -r /app/node_modules "$TMP_DIR"/node_modules
 
     echo "✅ Bruno runtime environment setup completed"
 }

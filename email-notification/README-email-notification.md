@@ -17,7 +17,7 @@ This set of scripts is designed to analyze test results from the `allure-results
 
 ## Requirements
 
-- Git Bash (for Windows) or Linux/macOS with bash
+- Git Bash (for Windows) or Linux/macOS with Bash
 - `jq` (for JSON parsing)
 - `awk` (for calculations and placeholder replacement)
 
@@ -106,7 +106,7 @@ The following placeholders are used in the `email-notification-body-template.txt
 
 ## Example Output
 
-```
+```log
 ℹ️ Analyzing test results from: /c/Projects/Cursor AI projects/atp3-common-scripts/allure-results
 ℹ️ Processing: 1903d409-587a-44ac-ba5d-b96dfda66c20-result.json
 ❌ ✗ Comprehensive Jira integration test - FAILING @pipeline_job
@@ -124,7 +124,7 @@ Skipped: 0
 
 ## Integration with Other Scripts
 
-Scripts can be integrated into other bash scripts:
+Scripts can be integrated into other Bash scripts:
 
 ### Option 1: Using Function (Recommended)
 
@@ -174,9 +174,9 @@ The `generate_email_notification_file` function accepts the following parameters
 1. **template_file** (optional) - path to template file
    - Default: `./email-notification/email-notification-body-template.txt`
 
-**Note:** 
+**Note:**
 - Allure results folder is always used by default: `./allure-results`
-- Output file name is automatically generated based on the template name. The file is saved in the `email-notification-generated` directory one level above the `email-notification` folder. For example, if the template is named `my-template.txt`, the output file will be `../email-notification-generated/my-template-generated.txt`.
+- Output filename is automatically generated based on the template name. The file is saved in the `email-notification-generated` directory one level above the `email-notification` folder. For example, if the template is named `my-template.txt`, the output file will be `../email-notification-generated/my-template-generated.txt`.
 
 ### Return Values
 

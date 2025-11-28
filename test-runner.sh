@@ -6,6 +6,7 @@ run_tests() {
     
     # Import upload monitoring module for security functions
     # A temporary solution: after moving all runner files to the app directory, you need to delete /scripts/upload-monitor.sh in all runners and leave only /app/scripts/upload-monitor.sh
+    # shellcheck disable=1091
     if [ -f "/app/scripts/upload-monitor.sh" ]; then
         source "/app/scripts/upload-monitor.sh"
     elif [ -f "/scripts/upload-monitor.sh" ]; then
@@ -17,7 +18,7 @@ run_tests() {
     
     # Create Allure results directory
     echo "📁 Creating Allure results directory..."
-    mkdir -p $TMP_DIR/allure-results
+    mkdir -p "$TMP_DIR"/allure-results
 
     # Clear sensitive variables before tests
     echo "🔐 Clearing sensitive environment variables before tests..."
