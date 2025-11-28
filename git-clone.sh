@@ -20,7 +20,7 @@ clone_repository() {
 
     echo "📦 Unzipping..."
     unzip -q "$TMP_DIR/repo.zip" -d "$TMP_DIR"
-    mv "$TMP_DIR"/${REPO_NAME}-${GIT_BRANCH_CLEANED}/* "$TMP_DIR"
+    mv "$TMP_DIR"/"${REPO_NAME}"-"${GIT_BRANCH_CLEANED}"/* "$TMP_DIR"
 
     echo "✅ Repository extracted to: $TMP_DIR"
 
@@ -39,7 +39,7 @@ clone_repository() {
     fi
 
     # Move into the work directory
-    cd $TMP_DIR
+    cd "$TMP_DIR" || exit 1
 
     # List contents to verify
     if [ -d "$TMP_DIR/app" ]; then

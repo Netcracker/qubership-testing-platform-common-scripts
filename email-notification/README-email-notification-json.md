@@ -11,7 +11,7 @@ This set of scripts is designed to analyze test results from the `allure-results
 
 ## Requirements
 
-- Git Bash (for Windows) or Linux/macOS with bash
+- Git Bash (for Windows) or Linux/macOS with Bash
 - `jq` (for JSON parsing)
 - `awk` (for calculations and placeholder replacement)
 
@@ -101,7 +101,7 @@ The script uses the following environment variables for JSON generation:
 
 ## Integration with Other Scripts
 
-Scripts can be integrated into other bash scripts:
+Scripts can be integrated into other Bash scripts:
 
 ### Option 1: Using Function (Recommended)
 
@@ -128,7 +128,7 @@ echo "Content: $GENERATED_JSON"
 
 The `generate_email_notification_json` function does not accept parameters.
 
-**Note:** 
+**Note:**
 - Allure results folder is always used by default: `./allure-results`
 - Output file is always named `email-notification-results-generated.json` and saved in the `email-notification-generated` directory one level above the `email-notification` folder.
 
