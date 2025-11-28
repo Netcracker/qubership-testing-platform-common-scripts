@@ -24,15 +24,17 @@ clone_repository() {
 
     echo "✅ Repository extracted to: $TMP_DIR"
 
-    # Check for either 'app/' or 'tests/' directory (for different runtime types)
+    # Check for either 'app/' or 'tests/' or 'collections/' directory (for different runtime types)
     if [ -d "$TMP_DIR/app" ]; then
         echo "✅ Clone successful. Found 'app/' directory in the repo."
     elif [ -d "$TMP_DIR/tests" ]; then
         echo "✅ Clone successful. Found 'tests/' directory in the repo."
     elif find "$TMP_DIR" -mindepth 1 -type f -iname "*postman_collection*" -print -quit | grep -q .; then
         echo "✅ Clone successful. Found 'postman_collection' files in the repo."
+    elif [ -d "$TMP_DIR/collections" ]; then
+        echo "✅ Clone successful. Found 'collections/' directory in the repo."
     else
-        echo "❌ ERROR: Neither 'app/' nor 'tests/' directory nor 'postman_collection' file found in the cloned repo!"
+        echo "❌ ERROR: Neither 'app/' nor 'tests/' nor 'collections/' directory nor 'postman_collection' file found in the cloned repo!"
         exit 1  
     fi
 
