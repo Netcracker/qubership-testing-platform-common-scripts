@@ -5,7 +5,15 @@ run_tests() {
     echo "▶ Starting test execution..."
     
     # Import upload monitoring module for security functions
-    source /scripts/upload-monitor.sh
+    # A temporary solution: after moving all runner files to the app directory, you need to delete /scripts/upload-monitor.sh in all runners and leave only /app/scripts/upload-monitor.sh
+    if [ -f "/app/scripts/upload-monitor.sh" ]; then
+        source "/app/scripts/upload-monitor.sh"
+    elif [ -f "/scripts/upload-monitor.sh" ]; then
+        source "/scripts/upload-monitor.sh"
+    else
+        echo "❌ upload-monitor.sh not found!"
+        exit 1
+    fi
     
     # Create Allure results directory
     echo "📁 Creating Allure results directory..."
