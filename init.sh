@@ -39,8 +39,5 @@ init_environment() {
     export TMP_DIR="/tmp/clone"
     mkdir -p "$TMP_DIR"
 
-    # Remove previous contents if any
-    rm -rf "${TMP_DIR:?}/"*
-    
     echo "✅ Environment initialized successfully"
 }
