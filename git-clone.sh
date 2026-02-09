@@ -217,7 +217,8 @@ clone_repository() {
         echo "📋 Contents of $TMP_DIR/tests directory:"
         ls -la tests
     fi
-    
+
+
     # Clear Git token from environment for security
     unset ATP_TESTS_GIT_TOKEN
     echo "🔐 Git token cleared from environment"
