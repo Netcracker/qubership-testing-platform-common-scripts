@@ -26,6 +26,8 @@ if (otelDisabled) {
   const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
   const { Resource } = require('@opentelemetry/resources');
   const { SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
+  const { HttpInstrumentation } = require('@opentelemetry/instrumentation-http');
+  const { UndiciInstrumentation } = require('@opentelemetry/instrumentation-undici');
 
   // Prefer an explicit runner-specific variable, but also respect standard OTEL env vars if present.
   const collectorUrl =
@@ -48,6 +50,10 @@ if (otelDisabled) {
     resource,
     traceExporter: new OTLPTraceExporter({ url: collectorUrl }),
     textMapPropagator: new B3Propagator(),
+    instrumentations: [
+      new HttpInstrumentation(),    // instruments Node.js http/https (used by axios)
+      new UndiciInstrumentation(),  // instruments undici / global fetch
+    ],
   });
 
   // Start SDK synchronously (NodeSDK.start() is sync in v0.54+).
