@@ -50,32 +50,35 @@ if (otelDisabled) {
     textMapPropagator: new B3Propagator(),
   });
 
-  // Start SDK but do not crash the process if it fails.
-  sdk
-    .start()
-    .then(() => {
-      if (isTruthy(process.env.OTEL_LOG_STARTUP ?? 'true')) {
-        console.log(`✅ OpenTelemetry started (exporter: ${collectorUrl})`);
-      }
-    })
-    .catch((err) => {
-      console.error('⚠️ OpenTelemetry failed to start; continuing without tracing.', err);
+  // Start SDK synchronously (NodeSDK.start() is sync in v0.54+).
+  let started = false;
+  try {
+    sdk.start();
+    started = true;
+  } catch (startErr) {
+    console.error('⚠️ OpenTelemetry failed to start; continuing without tracing.', startErr);
+  }
+
+  if (started) {
+    if (isTruthy(process.env.OTEL_LOG_STARTUP ?? 'true')) {
+      console.log(`✅ OpenTelemetry started (exporter: ${collectorUrl})`);
+    }
+
+    const shutdown = () => {
+      sdk
+        .shutdown()
+        .catch((err) => console.error('⚠️ OpenTelemetry shutdown error', err))
+        .finally(() => process.exit(0));
+    };
+
+    // Best-effort flush on termination.
+    process.once('SIGTERM', shutdown);
+    process.once('SIGINT', shutdown);
+    process.once('beforeExit', () => {
+      // Don't force exit; just attempt to flush.
+      sdk.shutdown().catch(() => undefined);
     });
-
-  const shutdown = () => {
-    sdk
-      .shutdown()
-      .catch((err) => console.error('⚠️ OpenTelemetry shutdown error', err))
-      .finally(() => process.exit(0));
-  };
-
-  // Best-effort flush on termination.
-  process.once('SIGTERM', shutdown);
-  process.once('SIGINT', shutdown);
-  process.once('beforeExit', () => {
-    // Don't force exit; just attempt to flush.
-    sdk.shutdown().catch(() => undefined);
-  });
+  }
 
   module.exports = {};
   } catch (err) {
