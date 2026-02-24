@@ -62,7 +62,7 @@ run_bruno_from_test_params() {
   echo "🔧 TEST_PARAMS raw:"
   echo "${TEST_PARAMS:-<empty>}"
 
-  echo "${TEST_PARAMS:-{}}" > /tmp/test_params.json
+  printf "%s" "${TEST_PARAMS:-{}}" > /tmp/test_params.json
 
   echo "🔎 Parsed TEST_PARAMS:"
   cat /tmp/test_params.json
@@ -127,10 +127,14 @@ run_bruno_from_test_params() {
 
     echo ""
     echo "🚀 Executing:"
-    echo "bru run \"$COL\" --env \"$BRUNO_ENV\" $BRUNO_FLAGS --verbose"
+    echo "cd \"$COL\" && bru run . --env \"$BRUNO_ENV\" $BRUNO_FLAGS --verbose"
     echo ""
 
-    bru run "$COL" --env "$BRUNO_ENV" $BRUNO_FLAGS --verbose || return 1
+    (
+      cd "$COL" || exit 1
+      bru run . --env "$BRUNO_ENV" $BRUNO_FLAGS --verbose
+    ) || return 1
+   
 
   done
 
