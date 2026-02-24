@@ -43,98 +43,76 @@ run_tests() {
     
     echo "✅ Test execution completed"
 }
+
 run_bruno_from_test_params() {
 
   echo "📍 Current working directory: $(pwd)"
   echo "📍 TMP_DIR: $TMP_DIR"
-  echo "📍 Listing root directory:"
-  ls -la
-  echo "📍 Listing collections directory:"
-  ls -la ./collections 2>/dev/null || echo "⚠️ collections directory not found"
-  echo "🔧 Bruno version:"
-  bru --version || echo "⚠️ Bruno not found"
-  echo "🔧 Node version:"
-  node --version
-  echo "🔧 NPM version:"
-  npm --version
+  echo "🔧 Bruno version: $(bru --version 2>/dev/null || echo 'not found')"
+  echo "🔧 Node version: $(node --version)"
+  echo "🔧 NPM version: $(npm --version)"
   echo ""
 
-  echo "🔧 TEST_PARAMS raw:"
-  echo "${TEST_PARAMS:-<empty>}"
+  if ! echo "$TEST_PARAMS" | jq . >/dev/null 2>&1; then
+    echo "❌ TEST_PARAMS is not valid JSON"
+    return 1
+  fi
 
-  printf "%s" "${TEST_PARAMS:-{}}" > /tmp/test_params.json
-
-  echo "🔎 Parsed TEST_PARAMS:"
-  cat /tmp/test_params.json
-  echo ""
+  echo "$TEST_PARAMS" | jq . > /tmp/test_params.json
 
   BRUNO_ENV=$(jq -r '.env // empty' /tmp/test_params.json)
   if [ -z "$BRUNO_ENV" ]; then
-    echo "❌ TEST_PARAMS.env is required for Bruno auto-run"
+    echo "❌ TEST_PARAMS.env is required"
     return 1
   fi
+
   echo "🔧 Using Bruno environment: $BRUNO_ENV"
 
   mapfile -t COLLECTIONS < <(jq -r '.collections[]? // empty' /tmp/test_params.json)
   if [ ${#COLLECTIONS[@]} -eq 0 ]; then
-    echo "❌ No collections provided in TEST_PARAMS"
+    echo "❌ No collections provided"
     return 1
   fi
 
   BRUNO_FLAGS=$(jq -r '.flags[]? // empty' /tmp/test_params.json | xargs)
 
-  while IFS="=" read -r KEY VALUE; do
-    [ -z "$KEY" ] && continue
-    export "$KEY"="$VALUE"
-  done < <(jq -r '.env_vars // {} | to_entries[] | "\(.key)=\(.value)"' /tmp/test_params.json)
 
-  echo "✅ Env variables loaded from TEST_PARAMS"
+  echo "🔄 Syncing EnvGene variables to Bruno..."
+
+  BRIDGE_VARS=(
+    PUBLIC_GATEWAY_URL
+    PRIVATE_GATEWAY_URL
+    INTERNAL_GATEWAY_URL
+    OPENSEARCH_URL
+    HUAWEI_URL
+    MONITORING_ALARM_ENGINE_URL
+    KAFKA_PLATFORM_URL
+  )
+
+  for var in "${BRIDGE_VARS[@]}"; do
+    value=$(printenv "$var")
+    if [ -n "$value" ]; then
+      bru set env "$var" "$value" --env "$BRUNO_ENV" >/dev/null 2>&1
+      echo "   ✔ $var synced"
+    fi
+  done
+
   echo ""
 
   for COL in "${COLLECTIONS[@]}"; do
 
     echo "--------------------------------------------------"
-    echo "🔎 Checking collection: $COL"
+    echo "🚀 Running collection: $COL"
 
-    if [ -d "$COL" ]; then
-      echo "✅ Collection directory exists"
-      echo "📍 Full path: $(realpath "$COL")"
-    else
-      echo "❌ Collection directory NOT FOUND"
-      echo "📂 Available directories:"
-      ls -R .
+    if [ ! -d "$COL" ]; then
+      echo "❌ Collection not found: $COL"
       return 1
     fi
-
-    echo "📂 Collection structure (max depth 3):"
-    find "$COL" -maxdepth 3 -type f
-
-    ENV_FILE="$COL/environments/$BRUNO_ENV.bru"
-    echo ""
-    echo "🔎 Checking environment file: $ENV_FILE"
-
-    if [ -f "$ENV_FILE" ]; then
-      echo "✅ Environment file exists"
-      echo "----- ENV FILE START -----"
-      cat "$ENV_FILE"
-      echo "----- ENV FILE END -----"
-    else
-      echo "❌ Environment file NOT FOUND"
-      echo "📂 Available env files:"
-      find "$COL/environments" -type f 2>/dev/null || echo "No environments folder"
-      return 1
-    fi
-
-    echo ""
-    echo "🚀 Executing:"
-    echo "cd \"$COL\" && bru run . --env \"$BRUNO_ENV\" $BRUNO_FLAGS --verbose"
-    echo ""
 
     (
       cd "$COL" || exit 1
       bru run . --env "$BRUNO_ENV" $BRUNO_FLAGS --verbose
     ) || return 1
-   
 
   done
 
