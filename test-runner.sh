@@ -106,5 +106,5 @@ run_bruno_from_test_params() {
 
   done
 
-  echo "✅ Bruno tests completed successfully"
+  echo " Bruno tests completed successfully"
 }
