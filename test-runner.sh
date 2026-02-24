@@ -44,6 +44,7 @@ run_tests() {
     echo "✅ Test execution completed"
 }
 
+
 run_bruno_from_test_params() {
 
   echo "📍 Current working directory: $(pwd)"
@@ -76,31 +77,16 @@ run_bruno_from_test_params() {
 
   BRUNO_FLAGS=$(jq -r '.flags[]? // empty' /tmp/test_params.json | xargs)
 
+  export public_gateway_url="$PUBLIC_GATEWAY_URL"
+  export private_gateway_url="$PRIVATE_GATEWAY_URL"
+  export internal_gateway_url="$INTERNAL_GATEWAY_URL"
+  export opensearch_url="$OPENSEARCH_URL"
+  export huawei_url="$HUAWEI_URL"
+  export monitoring_alarm_engine_url="$MONITORING_ALARM_ENGINE_URL"
+  export kafka_platform_url="$KAFKA_PLATFORM_URL"
 
-  echo "🔄 Syncing EnvGene variables to Bruno..."
-
-  BRIDGE_VARS=(
-    PUBLIC_GATEWAY_URL
-    PRIVATE_GATEWAY_URL
-    INTERNAL_GATEWAY_URL
-    OPENSEARCH_URL
-    HUAWEI_URL
-    MONITORING_ALARM_ENGINE_URL
-    KAFKA_PLATFORM_URL
-  )
-
-  for var in "${BRIDGE_VARS[@]}"; do
-    value=$(printenv "$var")
-    if [ -n "$value" ]; then
-      bru set env "$var" "$value" --env "$BRUNO_ENV" >/dev/null 2>&1
-
-      lower=$(echo "$var" | tr '[:upper:]' '[:lower:]')
-      bru set env "$lower" "$value" --env "$BRUNO_ENV" >/dev/null 2>&1
-
-      echo "   ✔ $var synced (with lowercase alias)"
-    fi
-  done
-
+  echo "🔎 Effective gateway mapping:"
+  echo "public_gateway_url=$public_gateway_url"
   echo ""
 
   for COL in "${COLLECTIONS[@]}"; do
