@@ -3,9 +3,7 @@
 # Test execution module
 run_tests() {
     echo "▶ Starting test execution..."
-    
-    # Import upload monitoring module for security functions
-    # A temporary solution: after moving all runner files to the app directory, you need to delete /scripts/upload-monitor.sh in all runners and leave only /app/scripts/upload-monitor.sh
+
     # shellcheck disable=1091
     if [ -f "/app/scripts/upload-monitor.sh" ]; then
         source "/app/scripts/upload-monitor.sh"
@@ -15,20 +13,17 @@ run_tests() {
         echo "❌ upload-monitor.sh not found!"
         exit 1
     fi
-    
-    # Create Allure results directory
-    echo "📁 Creating Allure results directory..."
-    mkdir -p "$TMP_DIR"/allure-results
 
-    # Clear sensitive variables before tests
+    echo "📁 Creating Allure results directory..."
+    mkdir -p "$TMP_DIR/allure-results"
+
     echo "🔐 Clearing sensitive environment variables before tests..."
     clear_sensitive_vars
 
-    # Execute test suite
     echo "🚀 Running test suite..."
 
     if [ -f "./start_tests.sh" ]; then
-        chmod +x ./start_tests.sh
+        chmod +x "./start_tests.sh"
         ./start_tests.sh || TEST_EXIT_CODE=$?
     elif [ -d "./collections" ]; then
         echo "ℹ️ start_tests.sh not found, but collections/ detected — running default Bruno runner"
@@ -40,10 +35,8 @@ run_tests() {
 
     TEST_EXIT_CODE=${TEST_EXIT_CODE:-0}
     echo "ℹ️ Test script exited with code: $TEST_EXIT_CODE (but continuing...)"
-    
     echo "✅ Test execution completed"
 }
-
 
 run_bruno_from_test_params() {
 
@@ -54,12 +47,12 @@ run_bruno_from_test_params() {
   echo "🔧 NPM version: $(npm --version)"
   echo ""
 
-  if ! echo "$TEST_PARAMS" | jq . >/dev/null 2>&1; then
+  if ! jq . <<< "$TEST_PARAMS" >/dev/null 2>&1; then
     echo "❌ TEST_PARAMS is not valid JSON"
     return 1
   fi
 
-  echo "$TEST_PARAMS" | jq . > /tmp/test_params.json
+  jq . <<< "$TEST_PARAMS" > /tmp/test_params.json
 
   BRUNO_ENV=$(jq -r '.env // empty' /tmp/test_params.json)
   if [ -z "$BRUNO_ENV" ]; then
@@ -70,7 +63,8 @@ run_bruno_from_test_params() {
   echo "🔧 Using Bruno environment: $BRUNO_ENV"
 
   mapfile -t COLLECTIONS < <(jq -r '.collections[]? // empty' /tmp/test_params.json)
-  if [ ${#COLLECTIONS[@]} -eq 0 ]; then
+
+  if [ "${#COLLECTIONS[@]}" -eq 0 ]; then
     echo "❌ No collections provided"
     return 1
   fi
@@ -121,7 +115,6 @@ run_bruno_from_test_params() {
       node /tools/bruno-to-allure.js \
         "$BRUNO_REPORT_PATH" \
         "$TMP_DIR/allure-results"
-
     )
 
   done
