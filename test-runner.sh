@@ -101,8 +101,28 @@ run_bruno_from_test_params() {
 
     (
       cd "$COL" || exit 1
-      bru run . --env "$BRUNO_ENV" $BRUNO_FLAGS --verbose
-    ) || return 1
+
+      COLLECTION_NAME=$(basename "$COL")
+      BRUNO_REPORT_PATH="$TMP_DIR/attachments/${COLLECTION_NAME}-result.json"
+
+      mkdir -p "$TMP_DIR/attachments"
+      mkdir -p "$TMP_DIR/allure-results"
+
+      echo "📄 Saving Bruno JSON report to: $BRUNO_REPORT_PATH"
+
+      bru run . \
+        --env "$BRUNO_ENV" \
+        $BRUNO_FLAGS \
+        --reporter-json "$BRUNO_REPORT_PATH" \
+        --verbose
+
+      echo "🔄 Converting Bruno report to Allure format..."
+
+      node /tools/bruno-to-allure.js \
+        "$BRUNO_REPORT_PATH" \
+        "$TMP_DIR/allure-results"
+
+    )
 
   done
 
