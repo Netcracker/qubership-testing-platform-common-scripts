@@ -43,10 +43,30 @@ run_tests() {
     
     echo "✅ Test execution completed"
 }
-
 run_bruno_from_test_params() {
-  echo "🔧 TEST_PARAMS: ${TEST_PARAMS:-<empty>}"
+
+  echo "📍 Current working directory: $(pwd)"
+  echo "📍 TMP_DIR: $TMP_DIR"
+  echo "📍 Listing root directory:"
+  ls -la
+  echo "📍 Listing collections directory:"
+  ls -la ./collections 2>/dev/null || echo "⚠️ collections directory not found"
+  echo "🔧 Bruno version:"
+  bru --version || echo "⚠️ Bruno not found"
+  echo "🔧 Node version:"
+  node --version
+  echo "🔧 NPM version:"
+  npm --version
+  echo ""
+
+  echo "🔧 TEST_PARAMS raw:"
+  echo "${TEST_PARAMS:-<empty>}"
+
   echo "${TEST_PARAMS:-{}}" > /tmp/test_params.json
+
+  echo "🔎 Parsed TEST_PARAMS:"
+  cat /tmp/test_params.json
+  echo ""
 
   BRUNO_ENV=$(jq -r '.env // empty' /tmp/test_params.json)
   if [ -z "$BRUNO_ENV" ]; then
@@ -55,26 +75,64 @@ run_bruno_from_test_params() {
   fi
   echo "🔧 Using Bruno environment: $BRUNO_ENV"
 
-  # Список коллекций
   mapfile -t COLLECTIONS < <(jq -r '.collections[]? // empty' /tmp/test_params.json)
   if [ ${#COLLECTIONS[@]} -eq 0 ]; then
     echo "❌ No collections provided in TEST_PARAMS"
     return 1
   fi
 
-  # Флаги
   BRUNO_FLAGS=$(jq -r '.flags[]? // empty' /tmp/test_params.json | xargs)
 
-  # Дополнительные env_vars → в окружение
   while IFS="=" read -r KEY VALUE; do
     [ -z "$KEY" ] && continue
     export "$KEY"="$VALUE"
   done < <(jq -r '.env_vars // {} | to_entries[] | "\(.key)=\(.value)"' /tmp/test_params.json)
+
   echo "✅ Env variables loaded from TEST_PARAMS"
+  echo ""
 
   for COL in "${COLLECTIONS[@]}"; do
-    echo "▶ bru run $COL --env $BRUNO_ENV $BRUNO_FLAGS"
-    bru run "$COL" --env "$BRUNO_ENV" $BRUNO_FLAGS || return 1
+
+    echo "--------------------------------------------------"
+    echo "🔎 Checking collection: $COL"
+
+    if [ -d "$COL" ]; then
+      echo "✅ Collection directory exists"
+      echo "📍 Full path: $(realpath "$COL")"
+    else
+      echo "❌ Collection directory NOT FOUND"
+      echo "📂 Available directories:"
+      ls -R .
+      return 1
+    fi
+
+    echo "📂 Collection structure (max depth 3):"
+    find "$COL" -maxdepth 3 -type f
+
+    ENV_FILE="$COL/environments/$BRUNO_ENV.bru"
+    echo ""
+    echo "🔎 Checking environment file: $ENV_FILE"
+
+    if [ -f "$ENV_FILE" ]; then
+      echo "✅ Environment file exists"
+      echo "----- ENV FILE START -----"
+      cat "$ENV_FILE"
+      echo "----- ENV FILE END -----"
+    else
+      echo "❌ Environment file NOT FOUND"
+      echo "📂 Available env files:"
+      find "$COL/environments" -type f 2>/dev/null || echo "No environments folder"
+      return 1
+    fi
+
+    echo ""
+    echo "🚀 Executing:"
+    echo "bru run \"$COL\" --env \"$BRUNO_ENV\" $BRUNO_FLAGS --verbose"
+    echo ""
+
+    bru run "$COL" --env "$BRUNO_ENV" $BRUNO_FLAGS --verbose || return 1
+
   done
+
   echo "✅ Bruno tests completed successfully"
 }
