@@ -93,7 +93,11 @@ run_bruno_from_test_params() {
     value=$(printenv "$var")
     if [ -n "$value" ]; then
       bru set env "$var" "$value" --env "$BRUNO_ENV" >/dev/null 2>&1
-      echo "   ✔ $var synced"
+
+      lower=$(echo "$var" | tr '[:upper:]' '[:lower:]')
+      bru set env "$lower" "$value" --env "$BRUNO_ENV" >/dev/null 2>&1
+
+      echo "   ✔ $var synced (with lowercase alias)"
     fi
   done
 
