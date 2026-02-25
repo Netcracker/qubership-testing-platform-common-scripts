@@ -85,7 +85,34 @@ run_bruno_from_test_params() {
 
   for COL in "${COLLECTIONS[@]}"; do
 
-    echo "--------------------------------------------------"
+  echo "--------------------------------------------------"
+
+  if [ "$COL" = "collections" ]; then
+    echo "🚀 Running ALL collections inside collections/"
+
+    for dir in collections/*/ ; do
+      [ -d "$dir" ] || continue
+
+      COLLECTION_NAME=$(basename "$dir")
+      BRUNO_REPORT_PATH="$TMP_DIR/attachments/${COLLECTION_NAME}-result.json"
+
+      mkdir -p "$TMP_DIR/attachments"
+      mkdir -p "$TMP_DIR/allure-results"
+
+      echo "🚀 Running collection: $dir"
+
+      bru run "$dir" \
+        --env "$BRUNO_ENV" \
+        $BRUNO_FLAGS \
+        --reporter-json "$BRUNO_REPORT_PATH" \
+        --verbose
+
+      node /tools/bruno-to-allure.js \
+        "$BRUNO_REPORT_PATH" \
+        "$TMP_DIR/allure-results"
+    done
+
+  else
     echo "🚀 Running collection: $COL"
 
     if [ ! -d "$COL" ]; then
@@ -93,31 +120,24 @@ run_bruno_from_test_params() {
       return 1
     fi
 
-    (
-      cd "$COL" || exit 1
+    COLLECTION_NAME=$(basename "$COL")
+    BRUNO_REPORT_PATH="$TMP_DIR/attachments/${COLLECTION_NAME}-result.json"
 
-      COLLECTION_NAME=$(basename "$COL")
-      BRUNO_REPORT_PATH="$TMP_DIR/attachments/${COLLECTION_NAME}-result.json"
+    mkdir -p "$TMP_DIR/attachments"
+    mkdir -p "$TMP_DIR/allure-results"
 
-      mkdir -p "$TMP_DIR/attachments"
-      mkdir -p "$TMP_DIR/allure-results"
+    bru run "$COL" \
+      --env "$BRUNO_ENV" \
+      $BRUNO_FLAGS \
+      --reporter-json "$BRUNO_REPORT_PATH" \
+      --verbose
 
-      echo "📄 Saving Bruno JSON report to: $BRUNO_REPORT_PATH"
+    node /tools/bruno-to-allure.js \
+      "$BRUNO_REPORT_PATH" \
+      "$TMP_DIR/allure-results"
+  fi
 
-      bru run . \
-        --env "$BRUNO_ENV" \
-        $BRUNO_FLAGS \
-        --reporter-json "$BRUNO_REPORT_PATH" \
-        --verbose
-
-      echo "🔄 Converting Bruno report to Allure format..."
-
-      node /tools/bruno-to-allure.js \
-        "$BRUNO_REPORT_PATH" \
-        "$TMP_DIR/allure-results"
-    )
-
-  done
+done
 
   echo " Bruno tests completed successfully"
 }
