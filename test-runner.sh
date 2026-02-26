@@ -88,9 +88,16 @@ run_bruno_from_test_params() {
   echo "public_gateway_url=$public_gateway_url"
   echo "BRUNO_ENV=$BRUNO_ENV"
   echo ""
-
+  export BRUNO_ENV="$BRUNO_ENV"
+  export public_gateway_url="$PUBLIC_GATEWAY_URL"
+  export private_gateway_url="$PRIVATE_GATEWAY_URL"
+  export internal_gateway_url="$INTERNAL_GATEWAY_URL"
+  export opensearch_url="$OPENSEARCH_URL"
+  export huawei_url="$HUAWEI_URL"
+  export monitoring_alarm_engine_url="$MONITORING_ALARM_ENGINE_URL"
+  export kafka_platform_url="$KAFKA_PLATFORM_URL"
+  
   for COL in "${COLLECTIONS[@]}"; do
-
     echo "--------------------------------------------------"
     echo "🚀 Running collection: $COL"
 
@@ -99,18 +106,23 @@ run_bruno_from_test_params() {
       return 1
     fi
 
+    # 1) normalize path for running FROM collections root
+    COL_REL="${COL#collections/}"
+
     COLLECTION_NAME=$(basename "$COL")
     BRUNO_REPORT_PATH="$TMP_DIR/attachments/${COLLECTION_NAME}-result.json"
 
-    mkdir -p "$TMP_DIR/attachments"
-    mkdir -p "$TMP_DIR/allure-results"
+    mkdir -p "$TMP_DIR/attachments" "$TMP_DIR/allure-results"
+
+
 
     (
       cd collections || exit 1
 
       echo "📄 Saving Bruno JSON report to: $BRUNO_REPORT_PATH"
+      echo "🧪 EXECUTING: bru run \"$COL_REL\" --env \"$BRUNO_ENV\" $BRUNO_FLAGS ..."
 
-      bru run "$COL" \
+      bru run "$COL_REL" \
         --env "$BRUNO_ENV" \
         $BRUNO_FLAGS \
         --reporter-json "$BRUNO_REPORT_PATH" \
@@ -118,7 +130,6 @@ run_bruno_from_test_params() {
     )
 
     BRU_EXIT_CODE=$?
-
     echo "🔎 Bruno exit code: $BRU_EXIT_CODE"
 
     if [ $BRU_EXIT_CODE -ne 0 ]; then
@@ -132,11 +143,7 @@ run_bruno_from_test_params() {
     fi
 
     echo "🔄 Converting Bruno report to Allure format..."
-
-    node /tools/bruno-to-allure.js \
-      "$BRUNO_REPORT_PATH" \
-      "$TMP_DIR/allure-results"
-
+    node /tools/bruno-to-allure.js "$BRUNO_REPORT_PATH" "$TMP_DIR/allure-results"
   done
 
   echo "✅ Bruno tests completed successfully"
