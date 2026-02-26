@@ -37,107 +37,96 @@ run_tests() {
     echo "ℹ️ Test script exited with code: $TEST_EXIT_CODE (but continuing...)"
     echo "✅ Test execution completed"
 }
-
 run_bruno_from_test_params() {
 
-  echo "📍 Current working directory: $(pwd)"
-  echo "📍 TMP_DIR: $TMP_DIR"
-  echo "🔧 Bruno version: $(bru --version 2>/dev/null || echo 'not found')"
-  echo "🔧 Node version: $(node --version)"
-  echo "🔧 NPM version: $(npm --version)"
-  echo ""
+  echo "================= BRUNO DEBUG START ================="
+
+  echo "📍 PWD: $(pwd)"
+  echo "📍 Bruno path: $(which bru)"
+  echo "📍 Bruno version: $(bru --version)"
+  echo "📍 Node version: $(node --version)"
+  echo "📍 NPM version: $(npm --version)"
+
+  echo "📦 TEST_PARAMS RAW:"
+  echo "$TEST_PARAMS"
 
   if ! jq . <<< "$TEST_PARAMS" >/dev/null 2>&1; then
-    echo "❌ TEST_PARAMS is not valid JSON"
-    return 1
+      echo "❌ TEST_PARAMS invalid JSON"
+      return 1
   fi
 
   jq . <<< "$TEST_PARAMS" > /tmp/test_params.json
 
-  BRUNO_ENV=$(jq -r '.env // empty' /tmp/test_params.json)
-  if [ -z "$BRUNO_ENV" ]; then
-    echo "❌ TEST_PARAMS.env is required"
-    return 1
-  fi
+  echo "📦 Parsed TEST_PARAMS:"
+  cat /tmp/test_params.json
 
-  echo "🔧 Using Bruno environment: $BRUNO_ENV"
+  BRUNO_ENV=$(jq -r '.env // empty' /tmp/test_params.json)
+  echo "🔧 BRUNO_ENV=$BRUNO_ENV"
 
   mapfile -t COLLECTIONS < <(jq -r '.collections[]? // empty' /tmp/test_params.json)
 
-  if [ "${#COLLECTIONS[@]}" -eq 0 ]; then
-    echo "❌ No collections provided"
-    return 1
-  fi
+  echo "📦 COLLECTIONS:"
+  printf '%s\n' "${COLLECTIONS[@]}"
 
   BRUNO_FLAGS=$(jq -r '.flags[]? // empty' /tmp/test_params.json | xargs)
-
-  export public_gateway_url="$PUBLIC_GATEWAY_URL"
-  export private_gateway_url="$PRIVATE_GATEWAY_URL"
-  export internal_gateway_url="$INTERNAL_GATEWAY_URL"
-  export opensearch_url="$OPENSEARCH_URL"
-  export huawei_url="$HUAWEI_URL"
-  export monitoring_alarm_engine_url="$MONITORING_ALARM_ENGINE_URL"
-  export kafka_platform_url="$KAFKA_PLATFORM_URL"
-
-  echo "🔎 Effective gateway mapping:"
-  echo "public_gateway_url=$public_gateway_url"
-  echo ""
+  echo "🔧 BRUNO_FLAGS=[$BRUNO_FLAGS]"
 
   for COL in "${COLLECTIONS[@]}"; do
 
-  echo "--------------------------------------------------"
+      echo "=================================================="
+      echo "🚀 Running collection: $COL"
 
-  if [ "$COL" = "collections" ]; then
-    echo "🚀 Running ALL collections inside collections/"
+      if [ ! -d "$COL" ]; then
+          echo "❌ Collection not found"
+          return 1
+      fi
 
-    for dir in collections/*/ ; do
-      [ -d "$dir" ] || continue
+      echo "📂 Listing collection folder:"
+      ls -la "$COL"
 
-      COLLECTION_NAME=$(basename "$dir")
+      COLLECTION_NAME=$(basename "$COL")
       BRUNO_REPORT_PATH="$TMP_DIR/attachments/${COLLECTION_NAME}-result.json"
 
       mkdir -p "$TMP_DIR/attachments"
       mkdir -p "$TMP_DIR/allure-results"
 
-      echo "🚀 Running collection: $dir"
+      echo "📄 Report path: $BRUNO_REPORT_PATH"
 
-      bru run "$dir" \
+      echo "🧪 EXECUTING:"
+      echo "bru run \"$COL\" --env \"$BRUNO_ENV\" $BRUNO_FLAGS --reporter-json \"$BRUNO_REPORT_PATH\" --verbose"
+
+      bru run "$COL" \
         --env "$BRUNO_ENV" \
         $BRUNO_FLAGS \
         --reporter-json "$BRUNO_REPORT_PATH" \
         --verbose
 
+      BRU_EXIT=$?
+      echo "🔎 Bruno exit code: $BRU_EXIT"
+
+      echo "📂 Attachments after run:"
+      ls -la "$TMP_DIR/attachments"
+
+      if [ ! -f "$BRUNO_REPORT_PATH" ]; then
+          echo "❌ REPORT FILE NOT CREATED"
+      else
+          echo "✅ REPORT FILE EXISTS"
+      fi
+
+      if [ $BRU_EXIT -ne 0 ]; then
+          echo "❌ Bruno failed. STOP."
+          return $BRU_EXIT
+      fi
+
+      echo "🔄 Converting to Allure..."
       node /tools/bruno-to-allure.js \
         "$BRUNO_REPORT_PATH" \
         "$TMP_DIR/allure-results"
-    done
 
-  else
-    echo "🚀 Running collection: $COL"
+      echo "📂 Allure folder:"
+      ls -la "$TMP_DIR/allure-results"
 
-    if [ ! -d "$COL" ]; then
-      echo "❌ Collection not found: $COL"
-      return 1
-    fi
+  done
 
-    COLLECTION_NAME=$(basename "$COL")
-    BRUNO_REPORT_PATH="$TMP_DIR/attachments/${COLLECTION_NAME}-result.json"
-
-    mkdir -p "$TMP_DIR/attachments"
-    mkdir -p "$TMP_DIR/allure-results"
-
-    bru run "$COL" \
-      --env "$BRUNO_ENV" \
-      $BRUNO_FLAGS \
-      --reporter-json "$BRUNO_REPORT_PATH" \
-      --verbose
-
-    node /tools/bruno-to-allure.js \
-      "$BRUNO_REPORT_PATH" \
-      "$TMP_DIR/allure-results"
-  fi
-
-done
-
-  echo " Bruno tests completed successfully"
+  echo "================= BRUNO DEBUG END ================="
 }
