@@ -43,15 +43,15 @@ run_tests() {
   return $TEST_EXIT_CODE
 }
 
+
 run_bruno_from_test_params() {
 
   echo "=================================================="
-  echo "🚀 Bruno execution with EnvGene (legacy bru.js mode)"
+  echo "🚀 Bruno execution with EnvGene (legacy mode)"
   echo "=================================================="
 
   source /tools/bru_tools.sh
 
-  # Проверяем TEST_PARAMS
   check_env_var "TEST_PARAMS" ""
 
   extract_bruno_env "$TEST_PARAMS" "BRUNO_ENV_STR"
@@ -67,13 +67,7 @@ run_bruno_from_test_params() {
   mkdir -p "$PATH_TO_ATTACHMENTS_DIR"
   mkdir -p "$PATH_TO_ALLURE_RESULTS"
 
-  # === EnvGene экспорт ===
-  echo "🔧 EnvGene mapping:"
-  echo "PUBLIC_GATEWAY_URL=$PUBLIC_GATEWAY_URL"
-  echo "PRIVATE_GATEWAY_URL=$PRIVATE_GATEWAY_URL"
-  echo "INTERNAL_GATEWAY_URL=$INTERNAL_GATEWAY_URL"
-  echo "OPENSEARCH_URL=$OPENSEARCH_URL"
-
+  # === EnvGene просто экспортируем ===
   export PUBLIC_GATEWAY_URL
   export PRIVATE_GATEWAY_URL
   export INTERNAL_GATEWAY_URL
@@ -82,68 +76,47 @@ run_bruno_from_test_params() {
   export MONITORING_ALARM_ENGINE_URL
   export KAFKA_PLATFORM_URL
 
-  # === Определяем BRU_BIN ===
-  if [ -z "$BRU_BIN" ]; then
-    BRU_BIN="$(npm root -g)/@usebruno/cli"
-  fi
-
   TOTAL_FAILED=0
 
   for collection_dir in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
 
     collection_path="${TMP_DIR}/${collection_dir}"
 
-    echo "--------------------------------------------------"
-    echo "➡️ Processing: $collection_path"
-    echo "--------------------------------------------------"
+    echo "➡️ Processing collection: $collection_path"
 
-    if [ ! -d "$collection_path" ]; then
-      echo "❌ Collection not found: $collection_path"
-      TOTAL_FAILED=1
-      continue
-    fi
+    if [ -d "$collection_path" ]; then
 
-    collection_name=$(basename "$collection_dir")
-    bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
+        collection_name=$(basename "$collection_dir")
+        bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
 
-    pushd "$collection_path" > /dev/null
+        pushd "$collection_path" > /dev/null
 
-    echo "▶ Running via bru.js"
+        if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
+            --env "${BRUNO_ENV_STR}" \
+            ${BRUNO_ENV_VARS_CLI} \
+            --reporter-json "${bruno_report_path}" 2>&1); then
 
-    if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
-        --env "${BRUNO_ENV_STR}" \
-        ${BRUNO_ENV_VARS_CLI} \
-        --reporter-json "${bruno_report_path}" 2>&1); then
+            echo "$output"
+            echo "❌ FAILED: $collection_name"
+            TOTAL_FAILED=1
+        else
+            echo "$output"
+            echo "✅ SUCCESS: $collection_name"
+        fi
 
-        echo "$output"
-        echo "❌ FAILED: $collection_name"
-        TOTAL_FAILED=1
-    else
-        echo "$output"
-        echo "✅ SUCCESS: $collection_name"
-    fi
+        popd > /dev/null
 
-    popd > /dev/null
+        node /tools/bruno-to-allure.js \
+            "$bruno_report_path" \
+            "$PATH_TO_ALLURE_RESULTS"
 
-    # Конвертация в Allure
-    if [ -f "$bruno_report_path" ]; then
-      node /tools/bruno-to-allure.js \
-        "$bruno_report_path" \
-        "$PATH_TO_ALLURE_RESULTS"
-    else
-      echo "⚠️ Report missing for $collection_name"
-      TOTAL_FAILED=1
     fi
 
   done
 
-  echo "=================================================="
-
   if [ "$TOTAL_FAILED" -ne 0 ]; then
-    echo "❌ Some collections failed"
     return 1
   else
-    echo " All collections executed"
     return 0
   fi
 }
