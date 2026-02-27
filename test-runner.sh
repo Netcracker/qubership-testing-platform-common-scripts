@@ -81,87 +81,135 @@ run_tests() {
     echo "ℹ️ Test script exited with code: $TEST_EXIT_CODE (but continuing...)"
     echo "✅ Test execution completed"
 }
-
 run_bruno_from_test_params() {
 
-  echo "📍 Current working directory: $(pwd)"
+  echo "=================================================="
+  echo "🚀 Starting Bruno execution from TEST_PARAMS"
+  echo "=================================================="
+
+  echo "📍 Working directory: $(pwd)"
   echo "📍 TMP_DIR: $TMP_DIR"
-  echo "🔧 Bruno version: $(bru --version 2>/dev/null || echo 'not found')"
+  echo "🔧 Bruno version: $(bru --version 2>/dev/null || echo 'NOT FOUND')"
   echo "🔧 Node version: $(node --version)"
   echo "🔧 NPM version: $(npm --version)"
-  echo ""
+  echo "=================================================="
 
+  # Validate TEST_PARAMS
   if ! jq . <<< "$TEST_PARAMS" >/dev/null 2>&1; then
     echo "❌ TEST_PARAMS is not valid JSON"
     return 1
   fi
 
-  jq . <<< "$TEST_PARAMS" > /tmp/test_params.json
+  echo "$TEST_PARAMS" | jq .
+  echo "=================================================="
 
-  BRUNO_ENV=$(jq -r '.env // empty' /tmp/test_params.json)
+  # Extract ENV
+  BRUNO_ENV=$(jq -r '.env // empty' <<< "$TEST_PARAMS")
+
   if [ -z "$BRUNO_ENV" ]; then
     echo "❌ TEST_PARAMS.env is required"
     return 1
   fi
 
-  echo "🔧 Using Bruno environment: $BRUNO_ENV"
+  echo "🌍 Bruno environment: $BRUNO_ENV"
 
-  mapfile -t COLLECTIONS < <(jq -r '.collections[]? // empty' /tmp/test_params.json)
+  # Extract collections
+  mapfile -t COLLECTIONS < <(jq -r '.collections[]?' <<< "$TEST_PARAMS")
 
   if [ "${#COLLECTIONS[@]}" -eq 0 ]; then
-    echo "❌ No collections provided"
+    echo "❌ No collections found in TEST_PARAMS"
     return 1
   fi
 
-  BRUNO_FLAGS=$(jq -r '.flags[]? // empty' /tmp/test_params.json | xargs)
-  export BRUNO_ENV="$BRUNO_ENV"
-  export public_gateway_url="$PUBLIC_GATEWAY_URL"
-  export private_gateway_url="$PRIVATE_GATEWAY_URL"
-  export internal_gateway_url="$INTERNAL_GATEWAY_URL"
-  export opensearch_url="$OPENSEARCH_URL"
-  export huawei_url="$HUAWEI_URL"
-  export monitoring_alarm_engine_url="$MONITORING_ALARM_ENGINE_URL"
-  export kafka_platform_url="$KAFKA_PLATFORM_URL"
+  echo "📦 Collections to execute (${#COLLECTIONS[@]}):"
+  for c in "${COLLECTIONS[@]}"; do
+    echo "   - $c"
+  done
+  echo "=================================================="
 
-  echo "🔎 Effective gateway mapping:"
-  echo "public_gateway_url=$public_gateway_url"
-  echo ""
+  # Extract flags
+  BRUNO_FLAGS=$(jq -r '.flags[]?' <<< "$TEST_PARAMS" | xargs)
+  echo "🏁 Bruno flags: $BRUNO_FLAGS"
+  echo "=================================================="
 
+  # Prepare folders
+  mkdir -p "$TMP_DIR/attachments"
+  mkdir -p "$TMP_DIR/allure-results"
+
+  TOTAL_FAILED=0
+
+  # Execute collections
   for COL in "${COLLECTIONS[@]}"; do
 
-    echo "--------------------------------------------------"
-    echo "🚀 Running collection: $COL"
+    echo ""
+    echo "##################################################"
+    echo "🚀 Starting collection: $COL"
+    echo "##################################################"
 
     if [ ! -d "$COL" ]; then
-      echo "❌ Collection not found: $COL"
-      return 1
+      echo "❌ Collection directory not found: $COL"
+      TOTAL_FAILED=1
+      continue
     fi
 
-    (
-      cd "$COL" || exit 1
+    COLLECTION_NAME=$(basename "$COL")
+    BRUNO_REPORT_PATH="$TMP_DIR/attachments/${COLLECTION_NAME}-result.json"
 
-      COLLECTION_NAME=$(basename "$COL")
-      BRUNO_REPORT_PATH="$TMP_DIR/attachments/${COLLECTION_NAME}-result.json"
+    echo "📂 Entering directory: $COL"
 
-      mkdir -p "$TMP_DIR/attachments"
-      mkdir -p "$TMP_DIR/allure-results"
+    pushd "$COL" > /dev/null || {
+      echo "❌ Failed to enter directory: $COL"
+      TOTAL_FAILED=1
+      continue
+    }
 
-      echo "📄 Saving Bruno JSON report to: $BRUNO_REPORT_PATH"
+    echo "▶ Running command:"
+    echo "bru run . --env \"$BRUNO_ENV\" $BRUNO_FLAGS --reporter-json \"$BRUNO_REPORT_PATH\" --verbose"
+    echo "--------------------------------------------------"
 
-      bru run . \
-        --env "$BRUNO_ENV" \
-        $BRUNO_FLAGS \
-        --reporter-json "$BRUNO_REPORT_PATH" \
-        --verbose
+    if ! bru run . \
+      --env "$BRUNO_ENV" \
+      $BRUNO_FLAGS \
+      --reporter-json "$BRUNO_REPORT_PATH" \
+      --verbose; then
 
-      echo "🔄 Converting Bruno report to Allure format..."
+      echo "❌ Bruno FAILED for: $COLLECTION_NAME"
+      TOTAL_FAILED=1
+    else
+      echo "✅ Bruno SUCCEEDED for: $COLLECTION_NAME"
+    fi
 
+    echo "--------------------------------------------------"
+    echo "🔄 Converting Bruno JSON to Allure..."
+
+    if [ -f "$BRUNO_REPORT_PATH" ]; then
       node /tools/bruno-to-allure.js \
         "$BRUNO_REPORT_PATH" \
         "$TMP_DIR/allure-results"
-    )
+      echo "✅ Allure conversion completed"
+    else
+      echo "⚠️ Bruno report file not found: $BRUNO_REPORT_PATH"
+      TOTAL_FAILED=1
+    fi
+
+    popd > /dev/null
+
+    echo "##################################################"
+    echo "🏁 Finished collection: $COLLECTION_NAME"
+    echo "##################################################"
 
   done
 
-  echo " Bruno tests completed successfully"
+  echo ""
+  echo "=================================================="
+  echo "📊 Bruno execution finished"
+  echo "=================================================="
+
+  if [ "$TOTAL_FAILED" -ne 0 ]; then
+    echo "❌ Some collections FAILED"
+    return 1
+  else
+    echo "✅ All collections executed successfully"
+    return 0
+  fi
 }
