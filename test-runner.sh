@@ -109,8 +109,47 @@ run_bruno_from_test_params() {
       node /tools/bruno-to-allure.js \
         "$bruno_report_path" \
         "$PATH_TO_ALLURE_RESULTS"
-    fi
+
+    else
+      echo "⚠️ Collection not found: $collection_path — skipping"
+
+      uuid=$(cat /proc/sys/kernel/random/uuid)
+      skipped_file="$PATH_TO_ALLURE_RESULTS/${uuid}-result.json"
+
+      cat > "$skipped_file" <<EOF
+  {
+    "uuid": "$uuid",
+    "name": "Collection: $(basename "$collection_dir")",
+    "status": "skipped",
+    "stage": "finished",
+    "statusDetails": {
+      "message": "Collection directory not found: $collection_path",
+      "trace": ""
+    },
+    "start": $(date +%s)000,
+    "stop": $(date +%s)000
+  }
+EOF
+
+  fi
+
   done
+
+  echo "📊 Generating Allure HTML report..."
+  if command -v allure >/dev/null 2>&1; then
+    if allure generate "$PATH_TO_ALLURE_RESULTS" -o "$TMP_DIR/allure-report" --clean; then
+      if [ -f "$TMP_DIR/allure-report/index.html" ]; then
+        echo "✅ Allure report generated: $TMP_DIR/allure-report (index.html present)"
+      else
+        echo "⚠️ Allure report directory created but index.html missing"
+        ls -la "$TMP_DIR/allure-report" || true
+      fi
+    else
+      echo "⚠️ Allure report generation failed (will continue, results will still be uploaded)"
+    fi
+  else
+    echo "⚠️ Allure CLI not found in PATH, skipping HTML report generation"
+  fi
 
   echo " DEBUG ALLURE RESULTS "
   ls -la "$PATH_TO_ALLURE_RESULTS"
