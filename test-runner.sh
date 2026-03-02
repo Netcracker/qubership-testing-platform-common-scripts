@@ -46,9 +46,8 @@ run_tests() {
 
 run_bruno_from_test_params() {
 
-  echo "=================================================="
   echo "🚀 Bruno execution with EnvGene (legacy mode)"
-  echo "=================================================="
+
 
   source /tools/bru_tools.sh
 
@@ -75,6 +74,7 @@ run_bruno_from_test_params() {
   export HUAWEI_URL
   export MONITORING_ALARM_ENGINE_URL
   export KAFKA_PLATFORM_URL
+  export NAMESPACE
 
   TOTAL_FAILED=0
 

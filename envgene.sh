@@ -17,6 +17,13 @@ load_envgene() {
     | jq -r '.systems[] | .["public-gateway"]? // empty 
       | .connections[0].HTTP.login // empty')
 
+  if [ -n "$PUBLIC_GATEWAY_URL" ]; then
+    host=$(echo "$PUBLIC_GATEWAY_URL" | sed -E 's#https?://([^/]+).*#\1#')
+    namespace_part=${host#public-gateway-}
+    export NAMESPACE=${namespace_part%%.*}
+  else
+    export NAMESPACE="unknown"
+  fi
   export PUBLIC_GATEWAY_PASSWORD=$(echo "$ATP_ENVGENE_CONFIGURATION" \
     | jq -r '.systems[] | .["public-gateway"]? // empty 
       | .connections[0].HTTP.password // empty')
