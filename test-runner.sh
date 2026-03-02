@@ -66,7 +66,10 @@ run_bruno_from_test_params() {
   mkdir -p "$PATH_TO_ATTACHMENTS_DIR"
   mkdir -p "$PATH_TO_ALLURE_RESULTS"
 
-  # === EnvGene просто экспортируем ===
+  echo "NAMESPACE=$NAMESPACE" > "$PATH_TO_ALLURE_RESULTS/environment.properties"
+  echo "PUBLIC_GATEWAY_URL=$PUBLIC_GATEWAY_URL" >> "$PATH_TO_ALLURE_RESULTS/environment.properties"
+  echo "BRUNO_ENV=$BRUNO_ENV_STR" >> "$PATH_TO_ALLURE_RESULTS/environment.properties"
+
   export PUBLIC_GATEWAY_URL
   export PRIVATE_GATEWAY_URL
   export INTERNAL_GATEWAY_URL
@@ -105,7 +108,7 @@ run_bruno_from_test_params() {
         fi
 
         popd > /dev/null
-
+        
         node /tools/bruno-to-allure.js \
             "$bruno_report_path" \
             "$PATH_TO_ALLURE_RESULTS"
@@ -113,7 +116,9 @@ run_bruno_from_test_params() {
     fi
 
   done
-
+  echo " DEBUG ALLURE RESULTS "
+  ls -la "$PATH_TO_ALLURE_RESULTS"
+  echo "-----------------------------------------"
   if [ "$TOTAL_FAILED" -ne 0 ]; then
     return 1
   else
