@@ -5,7 +5,7 @@ run_tests() {
 
   set -o pipefail
 
-  # shellcheck disable=1091
+  # shellcheck disable=SC1091
   if [ -f "/app/scripts/upload-monitor.sh" ]; then
     source "/app/scripts/upload-monitor.sh"
   elif [ -f "/scripts/upload-monitor.sh" ]; then
@@ -40,15 +40,13 @@ run_tests() {
   echo "ℹ️ Test script exited with code: $TEST_EXIT_CODE"
   echo "✅ Test execution completed"
 
-  return $TEST_EXIT_CODE
+  return "$TEST_EXIT_CODE"
 }
 
-
 run_bruno_from_test_params() {
-
   echo "🚀 Bruno execution with EnvGene (legacy mode)"
 
-
+  # shellcheck disable=SC1091
   source /tools/bru_tools.sh
 
   check_env_var "TEST_PARAMS" ""
@@ -58,7 +56,7 @@ run_bruno_from_test_params() {
   extract_bruno_env_vars "$TEST_PARAMS" "BRUNO_ENV_VARS_CLI"
   extract_bruno_flags "$TEST_PARAMS" "BRUNO_FLAGS_CLI"
 
-  cd "$TMP_DIR"
+  cd "$TMP_DIR" || return 1
 
   PATH_TO_ATTACHMENTS_DIR="${TMP_DIR}/attachments"
   PATH_TO_ALLURE_RESULTS="${TMP_DIR}/allure-results"
@@ -82,43 +80,42 @@ run_bruno_from_test_params() {
   TOTAL_FAILED=0
 
   for collection_dir in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
-
     collection_path="${TMP_DIR}/${collection_dir}"
 
     echo "➡️ Processing collection: $collection_path"
 
     if [ -d "$collection_path" ]; then
+      collection_name=$(basename "$collection_dir")
+      bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
 
-        collection_name=$(basename "$collection_dir")
-        bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
+      pushd "$collection_path" > /dev/null || return 1
 
-        pushd "$collection_path" > /dev/null
+      # shellcheck disable=SC2086
+      if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
+        --env "${BRUNO_ENV_STR}" \
+        ${BRUNO_ENV_VARS_CLI} \
+        --reporter-json "${bruno_report_path}" 2>&1); then
 
-        if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
-            --env "${BRUNO_ENV_STR}" \
-            ${BRUNO_ENV_VARS_CLI} \
-            --reporter-json "${bruno_report_path}" 2>&1); then
+        echo "$output"
+        echo "❌ FAILED: $collection_name"
+        TOTAL_FAILED=1
+      else
+        echo "$output"
+        echo "✅ SUCCESS: $collection_name"
+      fi
 
-            echo "$output"
-            echo "❌ FAILED: $collection_name"
-            TOTAL_FAILED=1
-        else
-            echo "$output"
-            echo "✅ SUCCESS: $collection_name"
-        fi
+      popd > /dev/null || return 1
 
-        popd > /dev/null
-        
-        node /tools/bruno-to-allure.js \
-            "$bruno_report_path" \
-            "$PATH_TO_ALLURE_RESULTS"
-
+      node /tools/bruno-to-allure.js \
+        "$bruno_report_path" \
+        "$PATH_TO_ALLURE_RESULTS"
     fi
-
   done
+
   echo " DEBUG ALLURE RESULTS "
   ls -la "$PATH_TO_ALLURE_RESULTS"
   echo "-----------------------------------------"
+
   if [ "$TOTAL_FAILED" -ne 0 ]; then
     return 1
   else
