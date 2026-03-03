@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Event-based upload monitoring module
 start_upload_monitoring() {
     echo "📡 Starting event-based upload monitoring..."
@@ -30,8 +29,9 @@ start_inotify_uploader() {
     DEST_PATH="$2"
     FILE_PATTERN="${3:-*}"
 
-    inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read NEW_FILE; do
+    inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read -r NEW_FILE; do
         FILE_NAME=$(basename "$NEW_FILE")
+        # shellcheck disable=SC2053
         if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
             upload_file_to_s3 "$NEW_FILE" "$DEST_PATH"
         fi
@@ -56,8 +56,9 @@ start_sync_uploader() {
     DEST_PATH="$2"
     FILE_PATTERN="${3:-*}"
 
-    inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read NEW_FILE; do
+    inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read -r NEW_FILE; do
         FILE_NAME=$(basename "$NEW_FILE")
+        # shellcheck disable=SC2053
         if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
             sync_directory_to_s3 "$WATCH_DIR" "$DEST_PATH"
         fi
@@ -117,7 +118,7 @@ finalize_upload() {
 
 generate_result_urls() {
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        RESULT_URL="${ATP_STORAGE_BUCKET}.${ATP_STORAGE_SERVER_UI_URL}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
+        RESULTS_URL="${ATP_STORAGE_BUCKET}.${ATP_STORAGE_SERVER_UI_URL}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
         # Generate base64-encoded URLs for MinIO UI
         RESULTS_FOLDER_PATH="Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
