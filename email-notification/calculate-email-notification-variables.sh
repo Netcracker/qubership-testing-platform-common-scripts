@@ -113,8 +113,10 @@ if [ "$BC_AVAILABLE" = true ]; then
     pass_rate_rounded=$(echo "scale=0; $passed_tests * 100 / $total_tests" | bc)
 else
     # Use awk for calculations if bc is not available
-    pass_rate=$(awk "BEGIN {printf \"%.2f\", $passed_tests * 100 / $total_tests}")
-    pass_rate_rounded=$(awk "BEGIN {printf \"%.0f\", $passed_tests * 100 / $total_tests}")
+    pass_rate=$(awk -v p="$passed_tests" -v t="$total_tests" \
+    'BEGIN { if (t > 0) printf "%.2f", p * 100 / t; else print "0.00" }')
+    pass_rate_rounded=$(awk -v p="$passed_tests" -v t="$total_tests" \
+    'BEGIN { if (t > 0) printf "%.0f", p * 100 / t; else print "0" }')
 fi
 
 # Determine overall status
@@ -135,8 +137,8 @@ export TEST_FAILED_COUNT="$failed_tests"
 export TEST_SKIPPED_COUNT="$skipped_tests"
 export TEST_OVERALL_STATUS="$overall_status"
 
-# Create test details string
 TEST_DETAILS_STRING=""
+# Create test details string
 for test_detail in "${test_details[@]}"; do
     if [ -n "$TEST_DETAILS_STRING" ]; then
         TEST_DETAILS_STRING="$TEST_DETAILS_STRING\n$test_detail"
@@ -144,7 +146,7 @@ for test_detail in "${test_details[@]}"; do
         TEST_DETAILS_STRING="$test_detail"
     fi
 done
-export TEST_DETAILS_STRING="$TEST_DETAILS_STRING"
+TEST_DETAILS_STRING="$TEST_DETAILS_STRING"
 
 # Display summary
 echo ""

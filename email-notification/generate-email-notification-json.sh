@@ -50,7 +50,8 @@ generate_email_notification_json() {
 
     # Calculate additional metrics
     if [ -n "${TEST_TOTAL_COUNT:-}" ] && [ "$TEST_TOTAL_COUNT" -gt 0 ]; then
-        TEST_FAILURE_RATE=$(awk "BEGIN {printf \"%.2f\", $TEST_FAILED_COUNT * 100 / $TEST_TOTAL_COUNT}")
+        TEST_FAILURE_RATE=$(awk -v failed="$TEST_FAILED_COUNT" -v total="$TEST_TOTAL_COUNT" \
+        'BEGIN { if (total > 0) printf "%.2f", failed * 100 / total; else print "0.00" }')
     else
         TEST_FAILURE_RATE="0.00"
     fi
@@ -230,10 +231,11 @@ generate_email_notification_json() {
 
 
     # Export the JSON content as environment variable for use in other scripts
-    export GENERATED_JSON="$json_content"
     export JSON_FILE="$output_file"
 
-    log_info "Environment variables exported: GENERATED_JSON, JSON_FILE"
+    log_info "Environment variables exported: JSON_FILE"
+    echo "$output_file"
+    return 0
     
     # Return the JSON content
     # echo "$json_content"
