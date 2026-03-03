@@ -77,45 +77,108 @@ sync_directory_to_s3() {
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null 2>&1
     fi
 }
-
 finalize_upload() {
-    echo "🔄 Finalizing upload operations..."
+    set -x 
+
+    echo "🔄 FINALIZE_UPLOAD START"
+    date
+    echo "TMP_DIR: $TMP_DIR"
+    echo "ATP_STORAGE_PROVIDER: $ATP_STORAGE_PROVIDER"
+    echo "ATP_STORAGE_SERVER_URL: $ATP_STORAGE_SERVER_URL"
+    echo "ATP_STORAGE_BUCKET: $ATP_STORAGE_BUCKET"
+    echo "=================================================="
 
     RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
     REPORTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
     ATTACHMENTS_S3_PATH="${REPORTS_S3_PATH}attachments/"
 
+    echo "📂 RESULTS_S3_PATH: $RESULTS_S3_PATH"
+    echo "📂 REPORTS_S3_PATH: $REPORTS_S3_PATH"
+    echo "📂 ATTACHMENTS_S3_PATH: $ATTACHMENTS_S3_PATH"
+
+    echo "🔑 Restoring AWS credentials..."
     restore_aws_credentials
 
-    if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
-        s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
-        s5cmd --no-verify-ssl sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
-        s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/"
-    else
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/"
-    fi
+    echo "📊 Local directory sizes:"
+    du -sh "$TMP_DIR/allure-results" || true
+    du -sh "$TMP_DIR/allure-report" || true
+    du -sh "$TMP_DIR/attachments" || true
+    du -sh "$TMP_DIR/scripts/email-notification-generated" || true
 
+    echo "🚀 Uploading allure-results..."
+    date
+    if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
+        s5cmd -v --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
+    else
+        s5cmd -v --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" \
+        sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
+    fi
+    echo "✅ Done allure-results"
+    date
+
+    echo "🚀 Uploading attachments..."
+    if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
+        s5cmd -v --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
+    else
+        s5cmd -v --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" \
+        sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
+    fi
+    echo "✅ Done attachments"
+    date
+
+    echo "🚀 Uploading allure-report..."
+    if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
+        s5cmd -v --no-verify-ssl sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
+    else
+        s5cmd -v --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" \
+        sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
+    fi
+    echo "✅ Done allure-report"
+    date
+
+    echo "🚀 Uploading email notification..."
+    if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
+        s5cmd -v --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" \
+        "${RESULTS_S3_PATH}email-notification-generated/"
+    else
+        s5cmd -v --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" \
+        sync "$TMP_DIR/scripts/email-notification-generated/" \
+        "${RESULTS_S3_PATH}email-notification-generated/"
+    fi
+    echo "✅ Done email notification"
+    date
+
+    echo "📄 Creating upload marker..."
     echo "${ENABLE_JIRA_INTEGRATION:-false}" > "$TMP_DIR/allure-results.uploaded"
 
+    echo "🚀 Uploading marker file..."
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        s5cmd --no-verify-ssl cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded"
+        s5cmd -v --no-verify-ssl cp "$TMP_DIR/allure-results.uploaded" \
+        "${RESULTS_S3_PATH}allure-results.uploaded"
     else
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded"
+        s5cmd -v --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" \
+        cp "$TMP_DIR/allure-results.uploaded" \
+        "${RESULTS_S3_PATH}allure-results.uploaded"
     fi
 
+    echo "🔗 Generating URLs..."
     generate_result_urls
+
+    echo "🛑 Killing background watchers..."
+    pkill -f inotifywait || true
+    jobs -p | xargs -r kill || true
+
+    echo "🧹 Cleaning credentials..."
     final_cleanup
 
     echo ""
     echo "Results are available at: ${RESULTS_URL}"
     echo "Reports are available at: ${REPORTS_URL}"
-    echo "✅ Upload finalization completed"
-}
+    echo "✅ FINALIZE_UPLOAD DONE"
+    echo "=================================================="
 
+    set +x
+}
 generate_result_urls() {
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
         RESULTS_URL="${ATP_STORAGE_BUCKET}.${ATP_STORAGE_SERVER_UI_URL}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
