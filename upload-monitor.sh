@@ -89,9 +89,11 @@ finalize_upload() {
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
         s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
         s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
+        s5cmd --no-verify-ssl sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
     else
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
     fi
 
     echo "${ENABLE_JIRA_INTEGRATION:-false}" > "$TMP_DIR/allure-results.uploaded"
