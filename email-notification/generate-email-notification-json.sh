@@ -22,17 +22,17 @@ generate_email_notification_json() {
     log_success() {
         echo "✅ $1"
     }
-
+    # shellcheck disable=SC2329
     log_warning() {
         echo "⚠️ $1"
     }
-
+    # shellcheck disable=SC2329
     log_error() {
         echo "❌ $1"
     }
-
     # Get script directory
-    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local SCRIPT_DIR
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
     # Set allure results directory to default location
     local allure_results_dir="/tmp/clone/allure-results"
@@ -119,8 +119,10 @@ generate_email_notification_json() {
         for result_file in "$allure_results_dir"/*-result.json; do
             if [ -f "$result_file" ]; then
                 # Extract test status and name using jq
-                local status=$(jq -r '.status' "$result_file" 2>/dev/null || echo "unknown")
-                local test_name=$(jq -r '.name' "$result_file" 2>/dev/null || echo "Unknown Test")
+                local status
+                status=$(jq -r '.status' "$result_file" 2>/dev/null || echo "unknown")
+                local test_name
+                test_name=$(jq -r '.name' "$result_file" 2>/dev/null || echo "Unknown Test")
                 
                 # Determine status and emoji
                 local emoji="❓"
