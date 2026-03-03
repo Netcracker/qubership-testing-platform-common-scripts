@@ -125,6 +125,7 @@ finalize_upload() {
     echo ""
     echo "Results are available at: ${RESULTS_URL}"
     echo "Reports are available at: ${REPORTS_URL}"
+    echo "Report view is available at: ${ATP_REPORT_VIEW_UI_URL}/${REPORTS_FOLDER_PATH}index.html"
     echo "✅ Upload finalization completed"
 }
 
