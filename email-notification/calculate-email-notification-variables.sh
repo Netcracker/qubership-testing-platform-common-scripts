@@ -19,15 +19,15 @@ log_info() {
 log_success() {
     echo "✅ $1"
 }
-
+# shellcheck disable=SC2329
 log_warning() {
     echo "⚠️ $1"
 }
-
+# shellcheck disable=SC2329
 log_error() {
     echo "❌ $1"
 }
-
+# shellcheck disable=SC2034
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -146,7 +146,6 @@ for test_detail in "${test_details[@]}"; do
         TEST_DETAILS_STRING="$test_detail"
     fi
 done
-TEST_DETAILS_STRING="$TEST_DETAILS_STRING"
 
 # Display summary
 echo ""
