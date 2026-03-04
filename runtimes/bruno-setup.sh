@@ -2,15 +2,15 @@
 
 # Bruno runtime environment setup module
 setup_runtime_environment() {
-    echo "🔧 Setting up Bruno runtime environment..."
+    log "🔧 Setting up Bruno runtime environment..."
 
     # Node.js runtime setup
     export NODE_PATH=$TMP_DIR:$NODE_PATH
-    echo "📦 Node.js path set to: $NODE_PATH"
+    log "📦 Node.js path set to: $NODE_PATH"
 
     # Copy node_modules from container to temp directory (Bruno-specific)
-    echo "🔧 Copying dependencies from container..."
+    log "🔧 Copying dependencies from container..."
     cp -r /app/node_modules "$TMP_DIR"/node_modules
 
-    echo "✅ Bruno runtime environment setup completed"
+    log "✅ Bruno runtime environment setup completed"
 }
