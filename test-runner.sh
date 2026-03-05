@@ -76,10 +76,14 @@ run_bruno_from_test_params() {
   export MONITORING_ALARM_ENGINE_URL
   export KAFKA_PLATFORM_URL
   export NAMESPACE
+  export PUBLIC_GATEWAY_LOGIN
+  export PUBLIC_GATEWAY_PASSWORD
 
-  TOTAL_FAILED=0
+
+  PIDS=()
 
   for collection_dir in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
+  (
     collection_path="${TMP_DIR}/${collection_dir}"
 
     echo "➡️ Processing collection: $collection_path"
@@ -88,9 +92,8 @@ run_bruno_from_test_params() {
       collection_name=$(basename "$collection_dir")
       bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
 
-      pushd "$collection_path" > /dev/null || return 1
+      cd "$collection_path" || exit 1
 
-      # shellcheck disable=SC2086
       if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
@@ -98,13 +101,11 @@ run_bruno_from_test_params() {
 
         echo "$output"
         echo "❌ FAILED: $collection_name"
-        TOTAL_FAILED=1
+        exit 1
       else
         echo "$output"
         echo "✅ SUCCESS: $collection_name"
       fi
-
-      popd > /dev/null || return 1
 
       node /tools/bruno-to-allure.js \
         "$bruno_report_path" \
@@ -112,29 +113,20 @@ run_bruno_from_test_params() {
 
     else
       echo "⚠️ Collection not found: $collection_path — skipping"
+    fi
+  ) &
 
-      uuid=$(cat /proc/sys/kernel/random/uuid)
-      skipped_file="$PATH_TO_ALLURE_RESULTS/${uuid}-result.json"
-
-      cat > "$skipped_file" <<EOF
-  {
-    "uuid": "$uuid",
-    "name": "Collection: $(basename "$collection_dir")",
-    "status": "skipped",
-    "stage": "finished",
-    "statusDetails": {
-      "message": "Collection directory not found: $collection_path",
-      "trace": ""
-    },
-    "start": $(date +%s)000,
-    "stop": $(date +%s)000
-  }
-EOF
-
-  fi
-
+  PIDS+=($!)
   done
+  FAIL=0
+  echo "⏳ Waiting for ${#PIDS[@]} collections to finish..."
 
+  for pid in "${PIDS[@]}"; do
+    if ! wait "$pid"; then
+      FAIL=1
+    fi
+  done
+  
   echo "📊 Generating Allure HTML report..."
   if command -v allure >/dev/null 2>&1; then
     if allure generate "$PATH_TO_ALLURE_RESULTS" -o "$TMP_DIR/allure-report" --clean; then
@@ -155,7 +147,7 @@ EOF
   ls -la "$PATH_TO_ALLURE_RESULTS"
   echo "-----------------------------------------"
 
-  if [ "$TOTAL_FAILED" -ne 0 ]; then
+  if [ "$FAIL" -ne 0 ]; then
     return 1
   else
     return 0
