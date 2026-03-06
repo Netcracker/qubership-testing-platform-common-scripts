@@ -74,7 +74,8 @@ for result_file in "$ALLURE_RESULTS_DIR"/*-result.json; do
         # Extract test status using jq
         status=$(jq -r '.status' "$result_file" 2>/dev/null || echo "unknown")
         test_name=$(jq -r '.name' "$result_file" 2>/dev/null || echo "Unknown Test")
-        
+        test_name=$(printf '%s' "$test_name" | jq -R .)
+        test_name=${test_name:1:-1}
         case "$status" in
             "passed")
                 passed_tests=$((passed_tests + 1))

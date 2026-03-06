@@ -83,6 +83,8 @@ generate_email_notification_json() {
                 local status_part="${BASH_REMATCH[1]// /}"
                 # Keep test name exactly as is (no formatting applied)
                 local test_name="${BASH_REMATCH[2]}"
+                test_name=$(printf '%s' "$test_name" | jq -R .)
+                test_name=${test_name:1:-1}
                 
                 
                 # Determine status and emoji
@@ -123,6 +125,8 @@ generate_email_notification_json() {
                 status=$(jq -r '.status' "$result_file" 2>/dev/null || echo "unknown")
                 local test_name
                 test_name=$(jq -r '.name' "$result_file" 2>/dev/null || echo "Unknown Test")
+                test_name=$(printf '%s' "$test_name" | jq -R .)
+                test_name=${test_name:1:-1}
                 
                 # Determine status and emoji
                 local emoji="❓"
