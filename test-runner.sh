@@ -84,7 +84,7 @@ run_bruno_from_test_params() {
   BRUNO_FOLDERS_CLI=()
 
   for folder in "${BRUNO_FOLDERS_ARRAY[@]}"; do
-    BRUNO_FOLDERS_CLI+=(--folder "$folder")
+    BRUNO_FOLDERS_CLI+=("$folder")
   done
   for collection_dir in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
     collection_path="${TMP_DIR}/${collection_dir}"
