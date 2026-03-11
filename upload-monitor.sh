@@ -95,7 +95,12 @@ finalize_upload() {
         echo "   Source: $TMP_DIR/scripts/email-notification-generated/ -> Destination: ${RESULTS_S3_PATH}email-notification-generated/"
         s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
         s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
-        s5cmd --no-verify-ssl sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
+        if [ -d "$TMP_DIR/allure-report" ]; then
+            echo "📤 Uploading Allure HTML report..."
+            s5cmd --no-verify-ssl sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
+        else
+            echo "ℹ️ allure-report directory not found — skipping HTML upload"
+        fi
         s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/"
     else
         echo "📤 Performing final sync to MinIO/S3-compatible storage..."
@@ -105,7 +110,13 @@ finalize_upload() {
         echo "   Source: $TMP_DIR/scripts/email-notification-generated/ -> Destination: ${RESULTS_S3_PATH}email-notification-generated/"
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
+        if [ -d "$TMP_DIR/allure-report" ]; then
+            echo "📤 Uploading Allure HTML report..."
+            s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" \
+            sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
+        else
+            echo "ℹ️ allure-report directory not found — skipping HTML upload"
+        fi
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/"
     fi
 
