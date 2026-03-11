@@ -81,11 +81,7 @@ run_bruno_from_test_params() {
   export PUBLIC_GATEWAY_PASSWORD
 
   TOTAL_FAILED=0
-  BRUNO_FOLDERS_CLI=()
 
-  for folder in "${BRUNO_FOLDERS_ARRAY[@]}"; do
-    BRUNO_FOLDERS_CLI+=("$folder")
-  done
   for collection_dir in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
     collection_path="${TMP_DIR}/${collection_dir}"
 
@@ -97,11 +93,29 @@ run_bruno_from_test_params() {
 
       pushd "$collection_path" > /dev/null || return 1
 
-      # shellcheck disable=SC2086
+      RESOLVED_FOLDERS=()
+
+      for folder in "${BRUNO_FOLDERS_ARRAY[@]}"; do
+        found=$(find . -type d -name "$folder" | head -n 1)
+
+        if [ -n "$found" ]; then
+          echo "Found folder in $collection_name: $found"
+          RESOLVED_FOLDERS+=("$found")
+        else
+          echo "Folder not found in $collection_name: $folder"
+        fi
+      done
+
+      if [ ${#RESOLVED_FOLDERS[@]} -eq 0 ]; then
+        echo " No matching folders found — skipping collection"
+        popd > /dev/null
+        continue
+      fi
+
       if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
-        "${BRUNO_FOLDERS_CLI[@]}" \
+        "${RESOLVED_FOLDERS[@]}" \
         --reporter-json "${bruno_report_path}" 2>&1); then
 
         echo "$output"
