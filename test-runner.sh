@@ -95,35 +95,68 @@ run_bruno_from_test_params() {
 
       RESOLVED_FOLDERS=()
 
-      for folder in "${BRUNO_FOLDERS_ARRAY[@]}"; do
-        found=$(find . -type d -name "$folder" | head -n 1)
+      if [ ${#BRUNO_FOLDERS_ARRAY[@]} -gt 0 ]; then
 
-        if [ -n "$found" ]; then
-          echo "Found folder in $collection_name: $found"
-          RESOLVED_FOLDERS+=("$found")
-        else
-          echo "Folder not found in $collection_name: $folder"
-        fi
-      done
+        for folder in "${BRUNO_FOLDERS_ARRAY[@]}"; do
+          found_any=false
 
-      if [ ${#RESOLVED_FOLDERS[@]} -eq 0 ]; then
-        echo " No matching folders found — skipping collection"
-        popd > /dev/null
-        continue
+          while IFS= read -r found; do
+            echo "✔ Found folder in $collection_name: $found"
+            RESOLVED_FOLDERS+=("$found")
+            found_any=true
+          done < <(find . -maxdepth 5 -type d -name "$folder" -not -path "*/.git/*" -not -path "*/node_modules/*")
+
+          if [ "$found_any" = false ]; then
+            echo "⚠ Folder not found in $collection_name: $folder"
+          fi
+        done
+
       fi
 
-      if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
-        --env "${BRUNO_ENV_STR}" \
-        ${BRUNO_ENV_VARS_CLI} \
-        "${RESOLVED_FOLDERS[@]}" \
-        --reporter-json "${bruno_report_path}" 2>&1); then
 
-        echo "$output"
-        echo "❌ FAILED: $collection_name"
-        TOTAL_FAILED=1
+      if [ ${#BRUNO_FOLDERS_ARRAY[@]} -eq 0 ]; then
+
+        echo "➡ Running full collection"
+
+        if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
+          --env "${BRUNO_ENV_STR}" \
+          ${BRUNO_ENV_VARS_CLI} \
+          --reporter-json "${bruno_report_path}" 2>&1); then
+
+          echo "$output"
+          echo "❌ FAILED: $collection_name"
+          TOTAL_FAILED=1
+
+        else
+          echo "$output"
+          echo "✅ SUCCESS: $collection_name"
+        fi
+
       else
-        echo "$output"
-        echo "✅ SUCCESS: $collection_name"
+
+        if [ ${#RESOLVED_FOLDERS[@]} -eq 0 ]; then
+          echo "⚠ No matching folders found — skipping collection"
+          popd > /dev/null
+          continue
+        fi
+
+        echo "➡ Running folders: ${RESOLVED_FOLDERS[*]}"
+
+        if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
+          --env "${BRUNO_ENV_STR}" \
+          ${BRUNO_ENV_VARS_CLI} \
+          "${RESOLVED_FOLDERS[@]}" \
+          --reporter-json "${bruno_report_path}" 2>&1); then
+
+          echo "$output"
+          echo "❌ FAILED: $collection_name"
+          TOTAL_FAILED=1
+
+        else
+          echo "$output"
+          echo "✅ SUCCESS: $collection_name"
+        fi
+
       fi
 
       popd > /dev/null || return 1
