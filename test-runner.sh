@@ -55,6 +55,7 @@ run_bruno_from_test_params() {
   extract_bruno_collections "$TEST_PARAMS" "BRUNO_COLLECTIONS_ARRAY"
   extract_bruno_env_vars "$TEST_PARAMS" "BRUNO_ENV_VARS_CLI"
   extract_bruno_flags "$TEST_PARAMS" "BRUNO_FLAGS_CLI"
+  extract_bruno_folders "$TEST_PARAMS" "BRUNO_FOLDERS_ARRAY"
 
   cd "$TMP_DIR" || return 1
 
@@ -80,7 +81,11 @@ run_bruno_from_test_params() {
   export PUBLIC_GATEWAY_PASSWORD
 
   TOTAL_FAILED=0
+  BRUNO_FOLDERS_CLI=()
 
+  for folder in "${BRUNO_FOLDERS_ARRAY[@]}"; do
+    BRUNO_FOLDERS_CLI+=(--folder "$folder")
+  done
   for collection_dir in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
     collection_path="${TMP_DIR}/${collection_dir}"
 
@@ -96,6 +101,7 @@ run_bruno_from_test_params() {
       if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
+        "${BRUNO_FOLDERS_CLI[@]}" \
         --reporter-json "${bruno_report_path}" 2>&1); then
 
         echo "$output"
