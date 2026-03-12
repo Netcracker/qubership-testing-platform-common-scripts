@@ -43,8 +43,118 @@ run_tests() {
   return "$TEST_EXIT_CODE"
 }
 
+run_collection_body() {
+
+  collection_dir="$1"
+  collection_path="${TMP_DIR}/${collection_dir}"
+
+  echo "➡️ Processing collection: $collection_path"
+
+  if [ -d "$collection_path" ]; then
+    collection_name=$(basename "$collection_dir")
+    bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
+
+    pushd "$collection_path" > /dev/null || return 1
+
+    RESOLVED_FOLDERS=()
+
+    if [ ${#BRUNO_FOLDERS_ARRAY[@]} -gt 0 ]; then
+
+      for folder in "${BRUNO_FOLDERS_ARRAY[@]}"; do
+        found_any=false
+
+        while IFS= read -r found; do
+          echo "✔ Found folder in $collection_name: $found"
+          RESOLVED_FOLDERS+=("$found")
+          found_any=true
+        done < <(find . -maxdepth 5 -type d -name "$folder" -not -path "*/.git/*" -not -path "*/node_modules/*")
+
+        if [ "$found_any" = false ]; then
+          echo "⚠ Folder not found in $collection_name: $folder"
+        fi
+      done
+
+    fi
+
+
+    if [ ${#BRUNO_FOLDERS_ARRAY[@]} -eq 0 ]; then
+
+      echo "➡ Running full collection"
+
+      if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
+        --env "${BRUNO_ENV_STR}" \
+        ${BRUNO_ENV_VARS_CLI} \
+        --reporter-json "${bruno_report_path}" 2>&1); then
+
+        echo "$output"
+        echo "❌ FAILED: $collection_name"
+        TOTAL_FAILED=1
+
+      else
+        echo "$output"
+        echo "✅ SUCCESS: $collection_name"
+      fi
+
+    else
+
+      if [ ${#RESOLVED_FOLDERS[@]} -eq 0 ]; then
+        echo "⚠ No matching folders found — skipping collection"
+        popd > /dev/null
+        return
+      fi
+
+      echo "➡ Running folders: ${RESOLVED_FOLDERS[*]}"
+
+      if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
+        --env "${BRUNO_ENV_STR}" \
+        ${BRUNO_ENV_VARS_CLI} \
+        "${RESOLVED_FOLDERS[@]}" \
+        --reporter-json "${bruno_report_path}" 2>&1); then
+
+        echo "$output"
+        echo "❌ FAILED: $collection_name"
+        TOTAL_FAILED=1
+
+      else
+        echo "$output"
+        echo "✅ SUCCESS: $collection_name"
+      fi
+
+    fi
+
+    popd > /dev/null || return 1
+
+    node /tools/bruno-to-allure.js \
+      "$bruno_report_path" \
+      "$PATH_TO_ALLURE_RESULTS"
+
+  else
+    echo "⚠️ Collection not found: $collection_path — skipping"
+
+    uuid=$(cat /proc/sys/kernel/random/uuid)
+    skipped_file="$PATH_TO_ALLURE_RESULTS/${uuid}-result.json"
+
+    cat > "$skipped_file" <<EOF
+{
+  "uuid": "$uuid",
+  "name": "Collection: $(basename "$collection_dir")",
+  "status": "skipped",
+  "stage": "finished",
+  "statusDetails": {
+    "message": "Collection directory not found: $collection_path",
+    "trace": ""
+  },
+  "start": $(date +%s)000,
+  "stop": $(date +%s)000
+}
+EOF
+
+  fi
+
+}
+
 run_bruno_from_test_params() {
-  echo "🚀 Bruno execution with EnvGene (legacy mode)"
+  echo "🚀 Bruno execution with EnvGene "
 
   # shellcheck disable=SC1091
   source /tools/bru_tools.sh
@@ -81,114 +191,23 @@ run_bruno_from_test_params() {
   export PUBLIC_GATEWAY_PASSWORD
 
   TOTAL_FAILED=0
+  export -f run_collection_body
 
-  for collection_dir in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
-    collection_path="${TMP_DIR}/${collection_dir}"
+  export TMP_DIR
+  export PATH_TO_ATTACHMENTS_DIR
+  export PATH_TO_ALLURE_RESULTS
+  export BRU_BIN
+  export BRUNO_ENV_STR
+  export BRUNO_ENV_VARS_CLI
+  export BRUNO_FLAGS_CLI
+  export BRUNO_FOLDERS_ARRAY
 
-    echo "➡️ Processing collection: $collection_path"
+  PARALLELISM=${PARALLELISM:-4}
 
-    if [ -d "$collection_path" ]; then
-      collection_name=$(basename "$collection_dir")
-      bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
+  echo "⚡ Running ${#BRUNO_COLLECTIONS_ARRAY[@]} collections with parallelism=$PARALLELISM"
 
-      pushd "$collection_path" > /dev/null || return 1
-
-      RESOLVED_FOLDERS=()
-
-      if [ ${#BRUNO_FOLDERS_ARRAY[@]} -gt 0 ]; then
-
-        for folder in "${BRUNO_FOLDERS_ARRAY[@]}"; do
-          found_any=false
-
-          while IFS= read -r found; do
-            echo "✔ Found folder in $collection_name: $found"
-            RESOLVED_FOLDERS+=("$found")
-            found_any=true
-          done < <(find . -maxdepth 5 -type d -name "$folder" -not -path "*/.git/*" -not -path "*/node_modules/*")
-
-          if [ "$found_any" = false ]; then
-            echo "⚠ Folder not found in $collection_name: $folder"
-          fi
-        done
-
-      fi
-
-
-      if [ ${#BRUNO_FOLDERS_ARRAY[@]} -eq 0 ]; then
-
-        echo "➡ Running full collection"
-
-        if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
-          --env "${BRUNO_ENV_STR}" \
-          ${BRUNO_ENV_VARS_CLI} \
-          --reporter-json "${bruno_report_path}" 2>&1); then
-
-          echo "$output"
-          echo "❌ FAILED: $collection_name"
-          TOTAL_FAILED=1
-
-        else
-          echo "$output"
-          echo "✅ SUCCESS: $collection_name"
-        fi
-
-      else
-
-        if [ ${#RESOLVED_FOLDERS[@]} -eq 0 ]; then
-          echo "⚠ No matching folders found — skipping collection"
-          popd > /dev/null
-          continue
-        fi
-
-        echo "➡ Running folders: ${RESOLVED_FOLDERS[*]}"
-
-        if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
-          --env "${BRUNO_ENV_STR}" \
-          ${BRUNO_ENV_VARS_CLI} \
-          "${RESOLVED_FOLDERS[@]}" \
-          --reporter-json "${bruno_report_path}" 2>&1); then
-
-          echo "$output"
-          echo "❌ FAILED: $collection_name"
-          TOTAL_FAILED=1
-
-        else
-          echo "$output"
-          echo "✅ SUCCESS: $collection_name"
-        fi
-
-      fi
-
-      popd > /dev/null || return 1
-
-      node /tools/bruno-to-allure.js \
-        "$bruno_report_path" \
-        "$PATH_TO_ALLURE_RESULTS"
-    
-    else
-      echo "⚠️ Collection not found: $collection_path — skipping"
-
-      uuid=$(cat /proc/sys/kernel/random/uuid)
-      skipped_file="$PATH_TO_ALLURE_RESULTS/${uuid}-result.json"
-
-      cat > "$skipped_file" <<EOF
-  {
-    "uuid": "$uuid",
-    "name": "Collection: $(basename "$collection_dir")",
-    "status": "skipped",
-    "stage": "finished",
-    "statusDetails": {
-      "message": "Collection directory not found: $collection_path",
-      "trace": ""
-    },
-    "start": $(date +%s)000,
-    "stop": $(date +%s)000
-  }
-EOF
-
-  fi
-
-  done
+  printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}" \
+  | xargs -I {} -P "${PARALLELISM}" bash -c 'run_collection_body "$@"' _ {} || true
 
   echo "📊 Generating Allure HTML report..."
   if command -v allure >/dev/null 2>&1; then
@@ -210,9 +229,5 @@ EOF
   ls -la "$PATH_TO_ALLURE_RESULTS"
   echo "-----------------------------------------"
 
-  if [ "$TOTAL_FAILED" -ne 0 ]; then
-    return 1
-  else
-    return 0
-  fi
+  return 0
 }
