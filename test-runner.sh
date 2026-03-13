@@ -48,6 +48,8 @@ run_collection_body() {
   collection_dir="$1"
   collection_path="${TMP_DIR}/${collection_dir}"
 
+  mapfile -t BRUNO_FOLDERS_ARRAY <<< "$BRUNO_FOLDERS_STR"
+
   echo "➡️ Processing collection: $collection_path"
 
   if [ -d "$collection_path" ]; then
@@ -144,6 +146,10 @@ EOF
 
     if [ -f "$bruno_report_path" ]; then
 
+      count=$(jq '.results | length' "$bruno_report_path")
+
+      echo "📊 $collection_name → $count tests"
+      printf "%s,%s\n" "$collection_name" "$count" >> "$TMP_DIR/tests_count.csv"
       node /tools/bruno-to-allure.js \
         "$bruno_report_path" \
         "$PATH_TO_ALLURE_RESULTS"
@@ -217,6 +223,7 @@ run_bruno_from_test_params() {
 
   mkdir -p "$PATH_TO_ATTACHMENTS_DIR"
   mkdir -p "$PATH_TO_ALLURE_RESULTS"
+  : > "$TMP_DIR/tests_count.csv"
 
   echo "NAMESPACE=$NAMESPACE" > "$PATH_TO_ALLURE_RESULTS/environment.properties"
   echo "PUBLIC_GATEWAY_URL=$PUBLIC_GATEWAY_URL" >> "$PATH_TO_ALLURE_RESULTS/environment.properties"
@@ -243,7 +250,8 @@ run_bruno_from_test_params() {
   export BRUNO_ENV_STR
   export BRUNO_ENV_VARS_CLI
   export BRUNO_FLAGS_CLI
-  export BRUNO_FOLDERS_ARRAY
+  BRUNO_FOLDERS_STR=$(printf "%s\n" "${BRUNO_FOLDERS_ARRAY[@]}")
+  export BRUNO_FOLDERS_STR
 
   PARALLELISM=${PARALLELISM:-4}
   echo "Collections to run:"
@@ -273,8 +281,10 @@ run_bruno_from_test_params() {
     echo "⚠️ Allure CLI not found in PATH, skipping HTML report generation"
   fi
 
-  echo " DEBUG ALLURE RESULTS "
-  ls -la "$PATH_TO_ALLURE_RESULTS"
+  # echo " DEBUG ALLURE RESULTS "
+  # ls -la "$PATH_TO_ALLURE_RESULTS"
+  echo "==== TEST COUNT BY COLLECTION ===="
+  sort "$TMP_DIR/tests_count.csv"
   echo "-----------------------------------------"
 
   return 0
