@@ -48,7 +48,11 @@ run_collection_body() {
   collection_dir="$1"
   collection_path="${TMP_DIR}/${collection_dir}"
 
-  mapfile -t BRUNO_FOLDERS_ARRAY <<< "$BRUNO_FOLDERS_STR"
+  if [ -n "$BRUNO_FOLDERS_STR" ]; then
+    mapfile -t BRUNO_FOLDERS_ARRAY <<< "$BRUNO_FOLDERS_STR"
+  else
+    BRUNO_FOLDERS_ARRAY=()
+  fi
 
   echo "➡️ Processing collection: $collection_path"
 
@@ -250,8 +254,13 @@ run_bruno_from_test_params() {
   export BRUNO_ENV_STR
   export BRUNO_ENV_VARS_CLI
   export BRUNO_FLAGS_CLI
-  BRUNO_FOLDERS_STR=$(printf "%s\n" "${BRUNO_FOLDERS_ARRAY[@]}")
-  export BRUNO_FOLDERS_STR
+  if [ ${#BRUNO_FOLDERS_ARRAY[@]} -gt 0 ]; then
+    BRUNO_FOLDERS_STR=$(printf "%s\n" "${BRUNO_FOLDERS_ARRAY[@]}")
+  else
+    BRUNO_FOLDERS_STR=""
+  fi
+
+export BRUNO_FOLDERS_STR
 
   PARALLELISM=${PARALLELISM:-4}
   echo "Collections to run:"
