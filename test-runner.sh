@@ -156,7 +156,8 @@ EOF
       printf "%s,%s\n" "$collection_name" "$count" >> "$TMP_DIR/tests_count.csv"
       node /tools/bruno-to-allure.js \
         "$bruno_report_path" \
-        "$PATH_TO_ALLURE_RESULTS"
+        "$PATH_TO_ALLURE_RESULTS" \
+        "$collection_name"
 
     else
 
@@ -170,15 +171,19 @@ EOF
         "name": "Collection: $collection_name",
         "status": "broken",
         "stage": "finished",
+        "labels": [
+          { "name": "parentSuite", "value": "Bruno" },
+          { "name": "suite", "value": "$collection_name" }
+        ],
         "statusDetails": {
           "message": "Bruno report file not generated",
-          "trace": "$output"
+          "trace": $(jq -Rs . <<< "$output")
         },
         "start": $(date +%s)000,
         "stop": $(date +%s)000
       }
 EOF
-
+      
     fi
 
   else
@@ -193,6 +198,10 @@ EOF
       "name": "Collection: $(basename "$collection_dir")",
       "status": "skipped",
       "stage": "finished",
+      "labels": [
+        { "name": "parentSuite", "value": "Bruno" },
+        { "name": "suite", "value": "$(basename "$collection_dir")" }
+      ],
       "statusDetails": {
         "message": "Collection directory not found: $collection_path",
         "trace": ""
@@ -224,7 +233,7 @@ run_bruno_from_test_params() {
 
   PATH_TO_ATTACHMENTS_DIR="${TMP_DIR}/attachments"
   PATH_TO_ALLURE_RESULTS="${TMP_DIR}/allure-results"
-
+  rm -rf "$PATH_TO_ATTACHMENTS_DIR" "$PATH_TO_ALLURE_RESULTS" "$TMP_DIR/allure-report"
   mkdir -p "$PATH_TO_ATTACHMENTS_DIR"
   mkdir -p "$PATH_TO_ALLURE_RESULTS"
   : > "$TMP_DIR/tests_count.csv"
