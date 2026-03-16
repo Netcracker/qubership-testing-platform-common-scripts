@@ -25,11 +25,17 @@ run_tests() {
     clear_sensitive_vars
 
     # Generate trace id
-    if [ -f "/app/scripts/trace-init.sh" ]; then
-        source "/app/scripts/trace-init.sh"
+
+    if command -v generate_trace_id > /dev/null 2>&1; then
         generate_trace_id
     else
-        log "❌ trace-init.sh not found!"
+        log "❌ generate_trace_id not found!"
+        if [ -f "/app/scripts/trace-init.sh" ]; then
+            source "/app/scripts/trace-init.sh"
+            generate_trace_id
+        else
+            log "❌ trace-init.sh not found!"
+        fi
         log "Skipping trace id generation..."
     fi
 
