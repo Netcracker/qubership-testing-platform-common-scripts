@@ -32,13 +32,27 @@ clone_repository() {
         git clone \
             --branch "$ATP_TESTS_GIT_REPO_BRANCH" \
             --single-branch \
-            --recurse-submodules \
             "$AUTH_REPO_URL" \
             "$TMP_DIR" || return 1
 
         cd "$TMP_DIR" || return 1
+
+        if [ -f .gitmodules ]; then
+            echo "🔧 Rewriting submodule URLs to use token authentication..."
+
+            git config --file=.gitmodules --get-regexp '^submodule\..*\.url$' | while read -r key url; do
+                if [[ "$url" =~ ^https://YOUR_GIT_HOST/ ]]; then
+                    auth_url=$(echo "$url" | sed "s|^https://|https://oauth2:${ATP_TESTS_GIT_TOKEN}@|")
+                    echo "   $key -> authenticated YOUR_GIT_HOST URL"
+                    git config --file=.gitmodules "$key" "$auth_url"
+                fi
+            done
+        fi
+
         git submodule sync --recursive
         git submodule update --init --recursive || return 1
+        echo "📋 Submodule status after initialization:"
+        git submodule status || true
 
         echo "✅ Repository cloned with submodules to: $TMP_DIR"
     }
