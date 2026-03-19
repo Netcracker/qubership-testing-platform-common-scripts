@@ -11,7 +11,7 @@ fail() {
     echo "⚠️  Writing error-state JSON and exiting with code 0 to prevent pod hang."
 
     local output_dir="/tmp/clone/scripts/email-notification-generated"
-    local output_file="$output_dir/email-notification2-results-generated.json"
+    local output_file="$output_dir/email-notification-results-generated.json"
     local timestamp
     timestamp="$(date '+%Y-%m-%d %H:%M:%S UTC')"
     local execution_date
@@ -56,19 +56,7 @@ EOF
         # Restore credentials if they were cleared before this call.
         local upload_key="${AWS_ACCESS_KEY_ID:-$_LOCAL_S3_KEY}"
         local upload_secret="${AWS_SECRET_ACCESS_KEY:-$_LOCAL_S3_SECRET}"
-
-        echo "📤 Uploading error JSON to S3: $dest"
-        if [[ "${ATP_STORAGE_PROVIDER:-}" == "aws" ]]; then
-            AWS_ACCESS_KEY_ID="$upload_key" AWS_SECRET_ACCESS_KEY="$upload_secret" \
-                s5cmd --no-verify-ssl cp "$output_file" "$dest" 2>/dev/null || \
-                echo "⚠️  S3 upload failed (non-fatal)."
-        elif [[ "${ATP_STORAGE_PROVIDER:-}" == "minio" || "${ATP_STORAGE_PROVIDER:-}" == "s3" ]]; then
-            AWS_ACCESS_KEY_ID="$upload_key" AWS_SECRET_ACCESS_KEY="$upload_secret" \
-                s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$output_file" "$dest" 2>/dev/null || \
-                echo "⚠️  S3 upload failed (non-fatal)."
-        else
-            echo "⚠️  ATP_STORAGE_PROVIDER not set or unrecognised — skipping S3 upload."
-        fi
+        echo "⚠️  Skipping s3 upload (test only)."
     else
         echo "⚠️  No S3 credentials available — skipping S3 upload (error visible in pod logs only)."
     fi
