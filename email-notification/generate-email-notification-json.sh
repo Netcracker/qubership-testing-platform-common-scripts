@@ -21,10 +21,12 @@ generate_email_notification_json() {
         echo "✅ $1"
     }
 
+    # shellcheck disable=SC2329
     log_warning() {
         echo "⚠️ $1"
     }
 
+    # shellcheck disable=SC2329
     log_error() {
         echo "❌ $1"
     }
@@ -45,7 +47,7 @@ generate_email_notification_json() {
     log_info "Generating JSON results file"
 
     # Calculate pass rate and test details
-    # shellcheck source=./scripts/email-notification/calculate-email-notification-variables.sh
+    # shellcheck source=/home/runner/work/qubership-testing-platform-common-scripts/qubership-testing-platform-common-scripts/scripts/email-notification/calculate-email-notification-variables.sh
     source "$SCRIPT_DIR/calculate-email-notification-variables.sh" "$allure_results_dir"
 
     # Calculate additional metrics
