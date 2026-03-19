@@ -12,20 +12,20 @@ clone_repository() {
         # ============================================
         if [ -z "${ATP_TESTS_GIT_TOKEN:-}" ]; then
             echo "❌ ERROR: ATP_TESTS_GIT_TOKEN is not set (required to download repository archive)"
-            exit 1
+            return 1
         fi
         if [ -z "${ATP_TESTS_GIT_REPO_URL:-}" ]; then
             echo "❌ ERROR: ATP_TESTS_GIT_REPO_URL is not set"
-            exit 1
+            return 1
         fi
         if [ -z "${ATP_TESTS_GIT_REPO_BRANCH:-}" ]; then
             echo "❌ ERROR: ATP_TESTS_GIT_REPO_BRANCH is not set"
-            exit 1
+            return 1
         fi
         # Basic URL sanity check (no whitespace, http/https)
         if [[ "$ATP_TESTS_GIT_REPO_URL" =~ [[:space:]] ]] || [[ ! "$ATP_TESTS_GIT_REPO_URL" =~ ^https?:// ]]; then
             echo "❌ ERROR: ATP_TESTS_GIT_REPO_URL is invalid URL: $ATP_TESTS_GIT_REPO_URL"
-            exit 1
+            return 1
         fi
 
         # Strip .git from URL and extract repo name
@@ -36,7 +36,7 @@ clone_repository() {
 
         if [ -z "${TMP_DIR:-}" ]; then
             echo "❌ ERROR: TMP_DIR is not set"
-            exit 1
+            return 1
         fi
         echo "📥 Downloading archive from: $ARCHIVE_URL"
         mkdir -p "$TMP_DIR" 2>/dev/null || true
@@ -103,7 +103,7 @@ clone_repository() {
 
             # For non-HTTP curl failures, stop here (HTTP_CODE may be empty/undefined).
             if [ "$CURL_EXIT_CODE" -ne 22 ]; then
-                exit 1
+                return 1
             fi
         fi
 
@@ -116,12 +116,12 @@ clone_repository() {
                 000)
                     echo "❌ ERROR: No HTTP response received from server (HTTP 000)."
                     echo "   Check network connectivity and URL: $ARCHIVE_URL"
-                    exit 1
+                    return 1
                     ;;
                 401|403)
                     echo "❌ ERROR: Authentication failed (HTTP $HTTP_CODE)."
                     echo "   Check that ATP_TESTS_GIT_TOKEN is valid and has access to the repository."
-                    exit 1
+                    return 1
                     ;;
                 404)
                     echo "❌ ERROR: Repository or branch not found (HTTP 404)."
@@ -129,22 +129,22 @@ clone_repository() {
                     echo "   - URL: $ATP_TESTS_GIT_REPO_URL"
                     echo "   - Branch: $ATP_TESTS_GIT_REPO_BRANCH"
                     echo "   - Archive URL: $ARCHIVE_URL"
-                    exit 1
+                    return 1
                     ;;
                 429)
                     echo "❌ ERROR: Rate limited by the server (HTTP 429)."
                     echo "   Try again later or reduce request frequency."
-                    exit 1
+                    return 1
                     ;;
                 5??)
                     echo "❌ ERROR: Server error while downloading archive (HTTP $HTTP_CODE)."
                     echo "   The Git server may be temporarily unavailable."
-                    exit 1
+                    return 1
                     ;;
                 *)
                     echo "❌ ERROR: Failed to download repository archive (HTTP $HTTP_CODE, curl exit code: $CURL_EXIT_CODE)."
                     echo "   Archive URL: $ARCHIVE_URL"
-                    exit 1
+                    return 1
                     ;;
             esac
         fi
@@ -154,7 +154,7 @@ clone_repository() {
         # ============================================
         if [ ! -f "$ZIP_PATH" ] || [ ! -s "$ZIP_PATH" ]; then
             echo "❌ ERROR: Downloaded file is missing or empty: $ZIP_PATH"
-            exit 1
+            return 1
         fi
 
         if command -v file >/dev/null 2>&1; then
@@ -169,7 +169,7 @@ clone_repository() {
                     echo "❌ ERROR: Downloaded repository is not recognized as a zip archive."
                 fi
                 echo "   File type: $FILE_TYPE"
-                exit 1
+                return 1
             fi
         else
             echo "⚠️ 'file' command not available; skipping zip magic-byte validation."
@@ -178,11 +178,11 @@ clone_repository() {
         if command -v unzip >/dev/null 2>&1; then
             if ! unzip -t "$ZIP_PATH" > /dev/null 2>&1; then
                 echo "❌ ERROR: Archive integrity test failed (unzip -t). Please retry the operation."
-                exit 1
+                return 1
             fi
         else
             echo "❌ ERROR: 'unzip' command is not available; cannot validate/extract archive."
-            exit 1
+            return 1
         fi
 
         echo "📦 Unzipping..."
@@ -203,7 +203,7 @@ clone_repository() {
         echo "✅ Validation successful. Found 'collections/' directory in the repo."
     else
         echo "❌ ERROR: Neither 'app/' nor 'tests/' nor 'collections/' directory nor 'postman_collection' file found in the cloned repo!"
-        exit 1  
+        return 1
     fi
 
     # Move into the work directory

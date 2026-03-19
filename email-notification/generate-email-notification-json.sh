@@ -10,8 +10,6 @@
 # Dependencies:
 # - calculate-email-notification-variables.sh (for test statistics)
 
-set -eo pipefail
-
 # Function to generate email notification JSON results
 generate_email_notification_json() {
     # Logging functions

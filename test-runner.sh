@@ -13,7 +13,7 @@ run_tests() {
         source "/scripts/upload-monitor.sh"
     else
         echo "❌ upload-monitor.sh not found!"
-        exit 1
+        return 1
     fi
     
     # Create Allure results directory
