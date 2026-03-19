@@ -11,7 +11,7 @@ fail() {
     echo "⚠️  Writing error-state JSON and exiting with code 0 to prevent pod hang."
 
     local output_dir="/tmp/clone/scripts/email-notification-generated"
-    local output_file="$output_dir/email-notification-results-generated.json"
+    local output_file="$output_dir/email-notification2-results-generated.json"
     local timestamp
     timestamp="$(date '+%Y-%m-%d %H:%M:%S UTC')"
     local execution_date
