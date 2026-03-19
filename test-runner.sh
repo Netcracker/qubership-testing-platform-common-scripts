@@ -252,6 +252,7 @@ run_bruno_from_test_params() {
   export NAMESPACE
   export PUBLIC_GATEWAY_LOGIN
   export PUBLIC_GATEWAY_PASSWORD
+  export SERVER_HOSTNAME
 
   TOTAL_FAILED=0
   export -f run_collection_body
@@ -263,6 +264,7 @@ run_bruno_from_test_params() {
   export BRUNO_ENV_STR
   export BRUNO_ENV_VARS_CLI
   export BRUNO_FLAGS_CLI
+
   if [ ${#BRUNO_FOLDERS_ARRAY[@]} -gt 0 ]; then
     BRUNO_FOLDERS_STR=$(printf "%s\n" "${BRUNO_FOLDERS_ARRAY[@]}")
   else
