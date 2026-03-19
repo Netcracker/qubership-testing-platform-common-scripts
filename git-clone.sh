@@ -29,8 +29,8 @@ clone_repository() {
         fi
 
         # Strip .git from URL and extract repo name
-        REPO_PATH=$(echo "$ATP_TESTS_GIT_REPO_URL" | sed 's|\.git$||')
-        GIT_BRANCH_CLEANED=$(echo "$ATP_TESTS_GIT_REPO_BRANCH" | sed 's|/|-|')
+        REPO_PATH="${ATP_TESTS_GIT_REPO_URL%.git}"
+        GIT_BRANCH_CLEANED=${ATP_TESTS_GIT_REPO_BRANCH/\//-}
         REPO_NAME=$(basename "$REPO_PATH")
         ARCHIVE_URL="${REPO_PATH}/-/archive/${ATP_TESTS_GIT_REPO_BRANCH}/${REPO_NAME}-${GIT_BRANCH_CLEANED}.zip"
 
@@ -187,7 +187,7 @@ clone_repository() {
 
         echo "📦 Unzipping..."
         unzip -q "$ZIP_PATH" -d "$TMP_DIR"
-        mv "$TMP_DIR"/${REPO_NAME}-${GIT_BRANCH_CLEANED}/* "$TMP_DIR"
+        mv "$TMP_DIR"/"${REPO_NAME}"-"${GIT_BRANCH_CLEANED}"/* "$TMP_DIR"
 
         echo "✅ Repository extracted to: $TMP_DIR"
     fi
@@ -207,7 +207,7 @@ clone_repository() {
     fi
 
     # Move into the work directory
-    cd "$TMP_DIR"
+    cd "$TMP_DIR" || return 1
 
     # List contents to verify
     if [ -d "$TMP_DIR/app" ]; then
