@@ -143,15 +143,23 @@ EOF
         echo "$output"
         echo "✅ SUCCESS: $collection_name"
       fi
-
+      echo "🧪 Bruno finished for $collection_name at $(date)"
     fi
 
     popd > /dev/null || return 1
 
     if [ -f "$bruno_report_path" ]; then
+      echo "📦 Parsing report: $bruno_report_path"
+      echo "⏱ Time before jq: $(date)"
 
-      count=$(jq '.results | length' "$bruno_report_path")
+      echo "DEBUG JSON TYPE:"
+      jq 'type' "$bruno_report_path"
 
+      echo "DEBUG JSON HEAD:"
+      head -n 5 "$bruno_report_path"
+      count=$(jq 'if type=="array" then length else .results | length end' "$bruno_report_path")
+      echo "📊 $collection_name → $count tests"
+      echo "⏱ Time after jq: $(date)"
       echo "📊 $collection_name → $count tests"
       printf "%s,%s\n" "$collection_name" "$count" >> "$TMP_DIR/tests_count.csv"
       node /tools/bruno-to-allure.js \
