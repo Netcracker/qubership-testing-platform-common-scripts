@@ -11,7 +11,7 @@ fail() {
     echo "⚠️  Writing error-state JSON and exiting with code 0 to prevent pod hang."
 
     local output_dir="/tmp/clone/scripts/email-notification-generated"
-    local output_file="$output_dir/email-notification-results-generated.json"
+    local output_file="$output_dir/error-details-results-generated.json"
     local timestamp
     timestamp="$(date '+%Y-%m-%d %H:%M:%S UTC')"
     local execution_date
@@ -51,12 +51,24 @@ EOF
     # Best-effort S3 upload — skip silently if credentials are unavailable.
     if [ -n "${AWS_ACCESS_KEY_ID:-}" ] || [ -n "${_LOCAL_S3_KEY:-}" ]; then
         local results_s3_path="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
-        local dest="${results_s3_path}email-notification-generated/email-notification-results-generated.json"
+        local dest="${results_s3_path}email-notification-generated/error-details-results-generated.json"
 
         # Restore credentials if they were cleared before this call.
         local upload_key="${AWS_ACCESS_KEY_ID:-$_LOCAL_S3_KEY}"
         local upload_secret="${AWS_SECRET_ACCESS_KEY:-$_LOCAL_S3_SECRET}"
-        echo "⚠️  Skipping s3 upload (test only)."
+
+        echo "📤 Uploading error JSON to S3: $dest"
+        if [[ "${ATP_STORAGE_PROVIDER:-}" == "aws" ]]; then
+            AWS_ACCESS_KEY_ID="$upload_key" AWS_SECRET_ACCESS_KEY="$upload_secret" \
+                s5cmd --no-verify-ssl cp "$output_file" "$dest" 2>/dev/null || \
+                echo "⚠️  S3 upload failed (non-fatal)."
+        elif [[ "${ATP_STORAGE_PROVIDER:-}" == "minio" || "${ATP_STORAGE_PROVIDER:-}" == "s3" ]]; then
+            AWS_ACCESS_KEY_ID="$upload_key" AWS_SECRET_ACCESS_KEY="$upload_secret" \
+                s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$output_file" "$dest" 2>/dev/null || \
+                echo "⚠️  S3 upload failed (non-fatal)."
+        else
+            echo "⚠️  ATP_STORAGE_PROVIDER not set or unrecognised — skipping S3 upload."
+        fi
     else
         echo "⚠️  No S3 credentials available — skipping S3 upload (error visible in pod logs only)."
     fi
