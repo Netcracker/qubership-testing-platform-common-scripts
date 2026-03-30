@@ -157,7 +157,7 @@ EOF
 
       echo "DEBUG JSON HEAD:"
       head -n 5 "$bruno_report_path"
-      count=$(jq 'if type=="array" then length elif type=="object" and has("results") then (.results | length) else 0 end' "$bruno_report_path")
+      count=$(jq 'if type=="array" then (if (.[0]?|type)=="object" and (.[0]?|has("results")) then ([.[].results[]]|length) else length end) elif type=="object" and has("results") then (.results|length) else 0 end' "$bruno_report_path")
       echo "📊 $collection_name → $count tests"
       echo "⏱ Time after jq: $(date)"
       echo "📊 $collection_name → $count tests"
