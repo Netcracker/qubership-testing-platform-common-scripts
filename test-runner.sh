@@ -60,6 +60,9 @@ run_collection_body() {
     collection_name=$(basename "$collection_dir")
     bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
 
+    collection_start_ts=$(date +%s)
+    echo "🚀 START collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
+
     pushd "$collection_path" > /dev/null || return 1
 
     RESOLVED_FOLDERS=()
@@ -87,6 +90,8 @@ run_collection_body() {
 
       echo "➡ Running full collection"
 
+      echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=full time=$(date '+%H:%M:%S')"
+
       if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
@@ -100,7 +105,7 @@ run_collection_body() {
         echo "$output"
         echo "✅ SUCCESS: $collection_name"
       fi
-
+      echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
     else
 
       if [ ${#RESOLVED_FOLDERS[@]} -eq 0 ]; then
@@ -122,12 +127,14 @@ run_collection_body() {
           "stop": $(date +%s)000
         }
 EOF
-
+        collection_end_ts=$(date +%s)
+        echo "🏁 END collection=$collection_name pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
         return
       fi
 
       echo "➡ Running folders: ${RESOLVED_FOLDERS[*]}"
 
+      echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=folders time=$(date '+%H:%M:%S')"
       
       if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
@@ -143,14 +150,17 @@ EOF
         echo "$output"
         echo "✅ SUCCESS: $collection_name"
       fi
-      echo "🧪 Bruno finished for $collection_name at $(date)"
+      echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
     fi
 
     popd > /dev/null || return 1
 
+    collection_end_ts=$(date +%s)
+
+    echo "🏁 END collection=$collection_name pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
+
     if [ -f "$bruno_report_path" ]; then
       echo "📦 Parsing report: $bruno_report_path"
-      echo "⏱ Time before jq: $(date)"
 
       echo "DEBUG JSON TYPE:"
       jq 'type' "$bruno_report_path"
@@ -158,8 +168,6 @@ EOF
       echo "DEBUG JSON HEAD:"
       head -n 5 "$bruno_report_path"
       count=$(jq 'if type=="array" then (if (.[0]?|type)=="object" and (.[0]?|has("results")) then ([.[].results[]]|length) else length end) elif type=="object" and has("results") then (.results|length) else 0 end' "$bruno_report_path")
-      echo "📊 $collection_name → $count tests"
-      echo "⏱ Time after jq: $(date)"
       echo "📊 $collection_name → $count tests"
       printf "%s,%s\n" "$collection_name" "$count" >> "$TMP_DIR/tests_count.csv"
       node /tools/bruno-to-allure.js \
