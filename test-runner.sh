@@ -59,6 +59,7 @@ run_collection_body() {
   if [ -d "$collection_path" ]; then
     collection_name=$(basename "$collection_dir")
     bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
+    raw_log_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}.raw.log"
 
     collection_start_ts=$(date +%s)
     echo "🚀 START collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
@@ -89,22 +90,20 @@ run_collection_body() {
     if [ ${#BRUNO_FOLDERS_ARRAY[@]} -eq 0 ]; then
 
       echo "➡ Running full collection"
-
       echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=full time=$(date '+%H:%M:%S')"
 
-      if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
+      if ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
-        --reporter-json "${bruno_report_path}" 2>&1); then
-
-        echo "$output"
-        echo "❌ FAILED: $collection_name"
-        TOTAL_FAILED=1
-
-      else
-        echo "$output"
+        --reporter-json "${bruno_report_path}" \
+        >"${raw_log_path}" 2>&1; then
         echo "✅ SUCCESS: $collection_name"
+      else
+        rc=$?
+        echo "❌ FAILED: $collection_name rc=$rc"
+        TOTAL_FAILED=0
       fi
+
       echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
     else
 
@@ -133,23 +132,21 @@ EOF
       fi
 
       echo "➡ Running folders: ${RESOLVED_FOLDERS[*]}"
-
       echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=folders time=$(date '+%H:%M:%S')"
-      
-      if ! output=$(${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
+
+      if ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
         "${RESOLVED_FOLDERS[@]}" \
-        --reporter-json "${bruno_report_path}" 2>&1); then
-
-        echo "$output"
-        echo "❌ FAILED: $collection_name"
-        TOTAL_FAILED=1
-
-      else
-        echo "$output"
+        --reporter-json "${bruno_report_path}" \
+        >"${raw_log_path}" 2>&1; then
         echo "✅ SUCCESS: $collection_name"
+      else
+        rc=$?
+        echo "❌ FAILED: $collection_name rc=$rc"
+        TOTAL_FAILED=1
       fi
+
       echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
     fi
 
@@ -162,11 +159,6 @@ EOF
     if [ -f "$bruno_report_path" ]; then
       echo "📦 Parsing report: $bruno_report_path"
 
-      echo "DEBUG JSON TYPE:"
-      jq 'type' "$bruno_report_path"
-
-      echo "DEBUG JSON HEAD:"
-      head -n 5 "$bruno_report_path"
       count=$(jq 'if type=="array" then (if (.[0]?|type)=="object" and (.[0]?|has("results")) then ([.[].results[]]|length) else length end) elif type=="object" and has("results") then (.results|length) else 0 end' "$bruno_report_path")
       echo "📊 $collection_name → $count tests"
       printf "%s,%s\n" "$collection_name" "$count" >> "$TMP_DIR/tests_count.csv"
@@ -193,7 +185,7 @@ EOF
         ],
         "statusDetails": {
           "message": "Bruno report file not generated",
-          "trace": $(jq -Rs . <<< "$output")
+          "trace": "See raw log: $raw_log_path"
         },
         "start": $(date +%s)000,
         "stop": $(date +%s)000
