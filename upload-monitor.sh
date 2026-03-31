@@ -2,7 +2,7 @@
 # Event-based upload monitoring module
 start_upload_monitoring() {
     echo "📡 Starting event-based upload monitoring..."
-    
+    UPLOAD_MONITOR_PIDS=()
     RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
     REPORTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
     ATTACHMENTS_S3_PATH="${REPORTS_S3_PATH}attachments/"
@@ -14,8 +14,8 @@ start_upload_monitoring() {
     _BACKGROUND_S3_SECRET="$_LOCAL_S3_SECRET"
     
     if [[ "${UPLOAD_METHOD:-cp}" == "sync" ]]; then
-        start_sync_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
-        start_sync_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
+        start_sync_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json"
+        start_sync_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH"
     else
         start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
         start_inotify_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
@@ -25,17 +25,18 @@ start_upload_monitoring() {
 }
 
 start_inotify_uploader() {
-    WATCH_DIR="$1"
-    DEST_PATH="$2"
-    FILE_PATTERN="${3:-*}"
+    local WATCH_DIR="$1"
+    local DEST_PATH="$2"
+    local FILE_PATTERN="${3:-*}"
 
     inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read -r NEW_FILE; do
         FILE_NAME=$(basename "$NEW_FILE")
-        # shellcheck disable=SC2053
         if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
             upload_file_to_s3 "$NEW_FILE" "$DEST_PATH"
         fi
     done &
+
+    UPLOAD_MONITOR_PIDS+=($!)
 }
 
 upload_file_to_s3() {
@@ -52,17 +53,18 @@ upload_file_to_s3() {
 }
 
 start_sync_uploader() {
-    WATCH_DIR="$1"
-    DEST_PATH="$2"
-    FILE_PATTERN="${3:-*}"
+    local WATCH_DIR="$1"
+    local DEST_PATH="$2"
+    local FILE_PATTERN="${3:-*}"
 
     inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read -r NEW_FILE; do
         FILE_NAME=$(basename "$NEW_FILE")
-        # shellcheck disable=SC2053
         if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
             sync_directory_to_s3 "$WATCH_DIR" "$DEST_PATH"
         fi
     done &
+
+    UPLOAD_MONITOR_PIDS+=($!)
 }
 
 sync_directory_to_s3() {
@@ -76,6 +78,15 @@ sync_directory_to_s3() {
         AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" \
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null 2>&1
     fi
+}
+
+stop_upload_monitoring() {
+    echo "🛑 Stopping upload monitors..."
+    for pid in "${UPLOAD_MONITOR_PIDS[@]}"; do
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+    done
+    echo "✅ Upload monitors stopped"
 }
 
 finalize_upload() {
