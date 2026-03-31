@@ -298,9 +298,15 @@ export BRUNO_FOLDERS_STR
 
   printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}" > "$PATH_TO_ALLURE_RESULTS/collections.txt"
 
+  parallel_start_ts=$(date +%s)
+  echo "⏳ XARGS PHASE START time=$(date '+%H:%M:%S')"
+
   printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}" \
   | xargs -I {} -P "${PARALLELISM}" bash -c 'run_collection_body "$@"' _ {} || true
 
+  parallel_end_ts=$(date +%s)
+  echo "✅ XARGS PHASE END time=$(date '+%H:%M:%S') took=$((parallel_end_ts-parallel_start_ts))s"
+  
   echo "📊 Generating Allure HTML report..."
   if command -v allure >/dev/null 2>&1; then
     if allure generate "$PATH_TO_ALLURE_RESULTS" -o "$TMP_DIR/allure-report" --clean; then
