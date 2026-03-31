@@ -293,8 +293,7 @@ export BRUNO_FOLDERS_STR
   parallel_start_ts=$(date +%s)
   echo "⏳ XARGS PHASE START time=$(date '+%H:%M:%S')"
 
-  printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}" \
-  | xargs -I {} -P "${PARALLELISM}" bash -c 'run_collection_body "$@"' _ {} || true
+  xargs -P "${PARALLELISM}" -I {} bash -c 'run_collection_body "$@"' _ {} <<< "$(printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}")" || true
 
   stop_upload_monitoring
 
