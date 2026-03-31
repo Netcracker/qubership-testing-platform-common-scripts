@@ -128,7 +128,7 @@ run_collection_body() {
         }
 EOF
         collection_end_ts=$(date +%s)
-        echo "🏁 END collection=$collection_name pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
+        echo "🏁 BRUNO EXECUTION FINISHED =$collection_name pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
         return
       fi
 
@@ -157,7 +157,7 @@ EOF
 
     collection_end_ts=$(date +%s)
 
-    echo "🏁 END collection=$collection_name pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
+    echo "🏁 BRUNO EXECUTION FINISHED =$collection_name pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
 
     if [ -f "$bruno_report_path" ]; then
       echo "📦 Parsing report: $bruno_report_path"
@@ -174,7 +174,7 @@ EOF
         "$bruno_report_path" \
         "$PATH_TO_ALLURE_RESULTS" \
         "$collection_name"
-
+      echo "✅ COLLECTION FULLY FINISHED collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
     else
 
       echo "⚠ Bruno report missing — writing broken test to Allure"
@@ -306,7 +306,7 @@ export BRUNO_FOLDERS_STR
 
   parallel_end_ts=$(date +%s)
   echo "✅ XARGS PHASE END time=$(date '+%H:%M:%S') took=$((parallel_end_ts-parallel_start_ts))s"
-  
+
   echo "📊 Generating Allure HTML report..."
   if command -v allure >/dev/null 2>&1; then
     if allure generate "$PATH_TO_ALLURE_RESULTS" -o "$TMP_DIR/allure-report" --clean; then
