@@ -291,13 +291,28 @@ export BRUNO_FOLDERS_STR
   printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}" > "$PATH_TO_ALLURE_RESULTS/collections.txt"
 
   parallel_start_ts=$(date +%s)
-  echo "⏳ XARGS PHASE START time=$(date '+%H:%M:%S')"
+  echo "⏳ PARALLEL PHASE START time=$(date '+%H:%M:%S')"
 
-  xargs -P "${PARALLELISM}" -I {} bash -c 'run_collection_body "$@"' _ {} <<< "$(printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}")" || true
+  running_jobs=0
 
+  for collection in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
+    bash -c 'run_collection_body "$1"' _ "$collection" &
+    running_jobs=$((running_jobs + 1))
 
+    if [ "$running_jobs" -ge "$PARALLELISM" ]; then
+      wait -n || true
+      running_jobs=$((running_jobs - 1))
+    fi
+  done
+
+  while [ "$running_jobs" -gt 0 ]; do
+    wait -n || true
+    running_jobs=$((running_jobs - 1))
+  done
+  
   parallel_end_ts=$(date +%s)
-  echo "✅ XARGS PHASE END time=$(date '+%H:%M:%S') took=$((parallel_end_ts-parallel_start_ts))s"
+
+  echo "✅ PARALLEL PHASE END time=$(date '+%H:%M:%S') took=$((parallel_end_ts-parallel_start_ts))s"
 
   echo "📊 Generating Allure HTML report..."
   if command -v allure >/dev/null 2>&1; then
