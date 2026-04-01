@@ -17,8 +17,8 @@ start_upload_monitoring() {
         start_sync_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json"
         start_sync_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH"
     else
-        start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
-        start_inotify_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
+        start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" 
+        start_inotify_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" 
     fi
     
     echo "✅ Upload monitoring started"
@@ -29,14 +29,17 @@ start_inotify_uploader() {
     local DEST_PATH="$2"
     local FILE_PATTERN="${3:-*}"
 
-    inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read -r NEW_FILE; do
-        FILE_NAME=$(basename "$NEW_FILE")
-        if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
-            upload_file_to_s3 "$NEW_FILE" "$DEST_PATH"
-        fi
-    done &
+    (
+      inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" |
+      while read -r NEW_FILE; do
+          FILE_NAME=$(basename "$NEW_FILE")
+          if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
+              upload_file_to_s3 "$NEW_FILE" "$DEST_PATH"
+          fi
+      done
+    ) </dev/null >/dev/null 2>&1 &
 
-    UPLOAD_MONITOR_PIDS+=($!)
+    UPLOAD_MONITOR_PIDS+=("$!")
 }
 
 upload_file_to_s3() {
@@ -57,14 +60,17 @@ start_sync_uploader() {
     local DEST_PATH="$2"
     local FILE_PATTERN="${3:-*}"
 
-    inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read -r NEW_FILE; do
-        FILE_NAME=$(basename "$NEW_FILE")
-        if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
-            sync_directory_to_s3 "$WATCH_DIR" "$DEST_PATH"
-        fi
-    done &
+    (
+      inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" |
+      while read -r NEW_FILE; do
+          FILE_NAME=$(basename "$NEW_FILE")
+          if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
+              sync_directory_to_s3 "$WATCH_DIR" "$DEST_PATH"
+          fi
+      done
+    ) </dev/null >/dev/null 2>&1 &
 
-    UPLOAD_MONITOR_PIDS+=($!)
+    UPLOAD_MONITOR_PIDS+=("$!")
 }
 
 sync_directory_to_s3() {
@@ -80,14 +86,6 @@ sync_directory_to_s3() {
     fi
 }
 
-stop_upload_monitoring() {
-    echo "🛑 Stopping upload monitors..."
-    for pid in "${UPLOAD_MONITOR_PIDS[@]}"; do
-        kill "$pid" 2>/dev/null || true
-        wait "$pid" 2>/dev/null || true
-    done
-    echo "✅ Upload monitors stopped"
-}
 
 finalize_upload() {
     echo "🔄 Finalizing upload operations..."
