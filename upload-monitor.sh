@@ -28,6 +28,7 @@ start_inotify_uploader() {
     local WATCH_DIR="$1"
     local DEST_PATH="$2"
     local FILE_PATTERN="${3:-*}"
+    echo "📡 Starting inotify uploader for directory: $WATCH_DIR, pattern: $FILE_PATTERN"
 
     (
       inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" |
@@ -59,7 +60,7 @@ start_sync_uploader() {
     local WATCH_DIR="$1"
     local DEST_PATH="$2"
     local FILE_PATTERN="${3:-*}"
-
+    echo "📡 Starting sync uploader for directory: $WATCH_DIR, pattern: $FILE_PATTERN"
     (
       inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" |
       while read -r NEW_FILE; do
