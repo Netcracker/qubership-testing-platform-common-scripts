@@ -295,7 +295,6 @@ export BRUNO_FOLDERS_STR
 
   xargs -P "${PARALLELISM}" -I {} bash -c 'run_collection_body "$@"' _ {} <<< "$(printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}")" || true
 
-  stop_upload_monitoring
 
   parallel_end_ts=$(date +%s)
   echo "✅ XARGS PHASE END time=$(date '+%H:%M:%S') took=$((parallel_end_ts-parallel_start_ts))s"
