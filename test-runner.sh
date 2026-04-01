@@ -281,7 +281,7 @@ run_bruno_from_test_params() {
 
 export BRUNO_FOLDERS_STR
 
-  PARALLELISM=${PARALLELISM:-4}
+  PARALLELISM=${PARALLELISM:-2}
   echo "Collections to run:"
   printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
   echo "Total collections: ${#BRUNO_COLLECTIONS_ARRAY[@]}"
@@ -291,7 +291,7 @@ export BRUNO_FOLDERS_STR
   printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}" > "$PATH_TO_ALLURE_RESULTS/collections.txt"
 
   parallel_start_ts=$(date +%s)
-  echo "⏳ PARALLEL PHASE START time=$(date '+%H:%M:%S')"
+  echo "✅ PARALLEL PHASE START time=$(date '+%H:%M:%S')"
 
   running_jobs=0
 
@@ -309,7 +309,7 @@ export BRUNO_FOLDERS_STR
     wait -n || true
     running_jobs=$((running_jobs - 1))
   done
-  
+
   parallel_end_ts=$(date +%s)
 
   echo "✅ PARALLEL PHASE END time=$(date '+%H:%M:%S') took=$((parallel_end_ts-parallel_start_ts))s"
