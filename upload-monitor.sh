@@ -34,6 +34,7 @@ start_inotify_uploader() {
       inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" |
       while read -r NEW_FILE; do
           FILE_NAME=$(basename "$NEW_FILE")
+          # shellcheck disable=SC2053
           if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
               upload_file_to_s3 "$NEW_FILE" "$DEST_PATH"
           fi
@@ -65,6 +66,7 @@ start_sync_uploader() {
       inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" |
       while read -r NEW_FILE; do
           FILE_NAME=$(basename "$NEW_FILE")
+          # shellcheck disable=SC2053
           if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
               sync_directory_to_s3 "$WATCH_DIR" "$DEST_PATH"
           fi
