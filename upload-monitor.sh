@@ -9,17 +9,18 @@ start_upload_monitoring() {
 
     mkdir -p "$TMP_DIR/allure-results"
     mkdir -p "$TMP_DIR/attachments"
-
+    
     _BACKGROUND_S3_KEY="$_LOCAL_S3_KEY"
     _BACKGROUND_S3_SECRET="$_LOCAL_S3_SECRET"
-
+    
     if [[ "${UPLOAD_METHOD:-cp}" == "sync" ]]; then
-        echo "ℹ️ Live sync monitoring disabled in sync mode; relying on finalize_upload"
+        start_sync_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json"
+        start_sync_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH"
     else
-        start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json"
-        echo "ℹ️ Attachments live upload disabled; relying on finalize_upload"
+        start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" 
+        start_inotify_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" 
     fi
-
+    
     echo "✅ Upload monitoring started"
 }
 
@@ -33,7 +34,6 @@ start_inotify_uploader() {
       inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" |
       while read -r NEW_FILE; do
           FILE_NAME=$(basename "$NEW_FILE")
-          # shellcheck disable=SC2053
           if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
               upload_file_to_s3 "$NEW_FILE" "$DEST_PATH"
           fi
@@ -65,7 +65,7 @@ start_sync_uploader() {
       inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" |
       while read -r NEW_FILE; do
           FILE_NAME=$(basename "$NEW_FILE")
-          # shellcheck disable=SC2053
+          #shellcheck disable=SC2233
           if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
               sync_directory_to_s3 "$WATCH_DIR" "$DEST_PATH"
           fi
@@ -119,8 +119,8 @@ finalize_upload() {
         echo "   Source: $TMP_DIR/attachments/ -> Destination: $ATTACHMENTS_S3_PATH"
         echo "   Source: $TMP_DIR/allure-report/ -> Destination: ${REPORTS_S3_PATH}allure-report/"
         echo "   Source: $TMP_DIR/scripts/email-notification-generated/ -> Destination: ${RESULTS_S3_PATH}email-notification-generated/"
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null 2>&1
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null 2>&1
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
         if [ -d "$TMP_DIR/allure-report" ]; then
             echo "📤 Uploading Allure HTML report..."
             s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" \
