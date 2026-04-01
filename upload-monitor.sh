@@ -9,18 +9,17 @@ start_upload_monitoring() {
 
     mkdir -p "$TMP_DIR/allure-results"
     mkdir -p "$TMP_DIR/attachments"
-    
+
     _BACKGROUND_S3_KEY="$_LOCAL_S3_KEY"
     _BACKGROUND_S3_SECRET="$_LOCAL_S3_SECRET"
-    
+
     if [[ "${UPLOAD_METHOD:-cp}" == "sync" ]]; then
-        start_sync_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json"
-        start_sync_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH"
+        echo "ℹ️ Live sync monitoring disabled in sync mode; relying on finalize_upload"
     else
-        start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" 
-        start_inotify_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" 
+        start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json"
+        echo "ℹ️ Attachments live upload disabled; relying on finalize_upload"
     fi
-    
+
     echo "✅ Upload monitoring started"
 }
 
@@ -120,8 +119,8 @@ finalize_upload() {
         echo "   Source: $TMP_DIR/attachments/ -> Destination: $ATTACHMENTS_S3_PATH"
         echo "   Source: $TMP_DIR/allure-report/ -> Destination: ${REPORTS_S3_PATH}allure-report/"
         echo "   Source: $TMP_DIR/scripts/email-notification-generated/ -> Destination: ${RESULTS_S3_PATH}email-notification-generated/"
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null 2>&1
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null 2>&1
         if [ -d "$TMP_DIR/allure-report" ]; then
             echo "📤 Uploading Allure HTML report..."
             s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" \
