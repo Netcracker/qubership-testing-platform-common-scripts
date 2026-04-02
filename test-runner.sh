@@ -1,11 +1,52 @@
 #!/bin/bash
 
+resolve_execution_name() {
+  local execution_name="$1"
+  local tests_root="${TMP_DIR}/tests"
+
+  echo "🔎 Resolving EXECUTION_NAME: $execution_name"
+  echo "🔎 Searching inside: $tests_root"
+
+  if [ -z "$execution_name" ]; then
+    echo "❌ EXECUTION_NAME is empty"
+    return 1
+  fi
+
+  if [ ! -d "$tests_root" ]; then
+    echo "❌ Tests directory not found: $tests_root"
+    return 1
+  fi
+
+  mapfile -t matches < <(find "$tests_root" -type f -name "$execution_name")
+
+  if [ "${#matches[@]}" -eq 1 ]; then
+    printf '%s\n' "${matches[0]}"
+    return 0
+  fi
+
+  if [ "${#matches[@]}" -gt 1 ]; then
+    echo "❌ Multiple files found for EXECUTION_NAME=$execution_name" >&2
+    printf '  %s\n' "${matches[@]}" >&2
+    return 1
+  fi
+
+  echo "❌ Test file not found: $execution_name" >&2
+  echo "📋 Available *.feature.spec.js files:" >&2
+  find "$tests_root" -type f -name "*.feature.spec.js" >&2
+  return 1
+}
+
 run_tests() {
   echo "▶ Starting test execution..."
 
   set -o pipefail
 
   # shellcheck disable=SC1091
+  if [ -n "${EXECUTION_NAME:-}" ] && [ -d "${TMP_DIR}/tests" ]; then
+    RESOLVED_EXECUTION_NAME="$(resolve_execution_name "$EXECUTION_NAME")" || exit 1
+    export EXECUTION_NAME="$RESOLVED_EXECUTION_NAME"
+    echo "✅ Updated EXECUTION_NAME: $EXECUTION_NAME"
+  fi
   if [ -f "/app/scripts/upload-monitor.sh" ]; then
     source "/app/scripts/upload-monitor.sh"
   elif [ -f "/scripts/upload-monitor.sh" ]; then
