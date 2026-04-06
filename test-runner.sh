@@ -233,6 +233,19 @@ run_bruno_from_test_params() {
 
   extract_bruno_env "$TEST_PARAMS" "BRUNO_ENV_STR"
   extract_bruno_collections "$TEST_PARAMS" "BRUNO_COLLECTIONS_ARRAY"
+  if [ ${#BRUNO_COLLECTIONS_ARRAY[@]} -eq 0 ]; then
+    echo "⚠ No collections provided — discovering all collections automatically"
+
+    mapfile -t BRUNO_COLLECTIONS_ARRAY < <(
+      find collections -mindepth 1 -maxdepth 1 -type d \
+      ! -name ".git" \
+      ! -name "node_modules" \
+      | sort
+    )
+
+    echo "📦 Discovered collections:"
+    printf "  - %s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
+  fi
   extract_bruno_env_vars "$TEST_PARAMS" "BRUNO_ENV_VARS_CLI"
   extract_bruno_flags "$TEST_PARAMS" "BRUNO_FLAGS_CLI"
   extract_bruno_folders "$TEST_PARAMS" "BRUNO_FOLDERS_ARRAY"
