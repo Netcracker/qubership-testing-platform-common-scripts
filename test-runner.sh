@@ -48,6 +48,12 @@ run_collection_body() {
   collection_dir="$1"
   collection_path="${TMP_DIR}/${collection_dir}"
 
+  COMMON_ENV_FILE="${TMP_DIR}/environments/${BRUNO_ENV_STR}.bru"
+
+  if [ ! -f "${COMMON_ENV_FILE}" ]; then
+    echo "❌ Common Bruno env file not found: ${COMMON_ENV_FILE}"
+    return 1
+  fi
   if [ -n "$BRUNO_FOLDERS_STR" ]; then
     mapfile -t BRUNO_FOLDERS_ARRAY <<< "$BRUNO_FOLDERS_STR"
   else
@@ -93,7 +99,7 @@ run_collection_body() {
       echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=full time=$(date '+%H:%M:%S')"
 
       if ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
-        --env "${BRUNO_ENV_STR}" \
+        --env-file "${COMMON_ENV_FILE}" \
         ${BRUNO_ENV_VARS_CLI} \
         --reporter-json "${bruno_report_path}" \
         >"${raw_log_path}" 2>&1; then
@@ -135,7 +141,7 @@ EOF
       echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=folders time=$(date '+%H:%M:%S')"
 
       if ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
-        --env "${BRUNO_ENV_STR}" \
+        --env-file "${COMMON_ENV_FILE}" \
         ${BRUNO_ENV_VARS_CLI} \
         "${RESOLVED_FOLDERS[@]}" \
         --reporter-json "${bruno_report_path}" \
