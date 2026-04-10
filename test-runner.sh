@@ -265,21 +265,27 @@ run_bruno_from_test_params() {
   mkdir -p "$PATH_TO_ALLURE_RESULTS"
   : > "$TMP_DIR/tests_count.csv"
 
-  echo "NAMESPACE=$NAMESPACE" > "$PATH_TO_ALLURE_RESULTS/environment.properties"
-  echo "PUBLIC_GATEWAY_URL=$PUBLIC_GATEWAY_URL" >> "$PATH_TO_ALLURE_RESULTS/environment.properties"
-  echo "BRUNO_ENV=$BRUNO_ENV_STR" >> "$PATH_TO_ALLURE_RESULTS/environment.properties"
+  {
+    echo "BRUNO_ENV=$BRUNO_ENV_STR"
 
-  export PUBLIC_GATEWAY_URL
-  export PRIVATE_GATEWAY_URL
-  export INTERNAL_GATEWAY_URL
-  export OPENSEARCH_URL
-  export HUAWEI_URL
-  export MONITORING_ALARM_ENGINE_URL
-  export KAFKA_PLATFORM_URL
-  export NAMESPACE
-  export PUBLIC_GATEWAY_LOGIN
-  export PUBLIC_GATEWAY_PASSWORD
-  export SERVER_HOSTNAME
+    while IFS= read -r key; do
+      case "$key" in
+        *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME)
+          printf '%s=%s\n' "$key" "${!key}"
+          ;;
+      esac
+    done < <(compgen -e | sort)
+  } > "$PATH_TO_ALLURE_RESULTS/environment.properties"
+
+  echo "Env vars exported to Bruno child processes:"
+  while IFS= read -r key; do
+    case "$key" in
+      *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME)
+        export "$key"
+        echo "  - $key"
+        ;;
+    esac
+  done < <(compgen -e)
 
   TOTAL_FAILED=0
   export -f run_collection_body
@@ -334,8 +340,8 @@ export BRUNO_FOLDERS_STR
   echo "✅ PARALLEL PHASE END time=$(date '+%H:%M:%S') took=$((parallel_end_ts-parallel_start_ts))s"
 
   echo "📊 Generating Allure HTML report..."
-  if command -v allure >/dev/null 2>&1; then
-    if allure generate "$PATH_TO_ALLURE_RESULTS" -o "$TMP_DIR/allure-report" --clean; then
+  if npx allure --version >/dev/null 2>&1; then
+    if npx allure generate "$PATH_TO_ALLURE_RESULTS" -o "$TMP_DIR/allure-report" --clean; then
       if [ -f "$TMP_DIR/allure-report/index.html" ]; then
         echo "✅ Allure report generated: $TMP_DIR/allure-report (index.html present)"
       else

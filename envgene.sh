@@ -1,32 +1,37 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 load_envgene() {
-
   if [ -z "${ATP_ENVGENE_CONFIGURATION:-}" ]; then
     echo "ATP_ENVGENE_CONFIGURATION is empty, skipping EnvGene mapping"
-    return
+    return 0
   fi
 
   echo "Loading EnvGene configuration..."
 
-  get_value() {
-    echo "$ATP_ENVGENE_CONFIGURATION" | jq -r "$1 // empty"
+  to_env_name() {
+    printf '%s\n' "$1" \
+      | tr '[:lower:]' '[:upper:]' \
+      | sed 's/[^A-Z0-9]/_/g'
   }
 
-  export PUBLIC_GATEWAY_URL=$(get_value '.systems[] | .["public-gateway"]? | .connections[0].HTTP.url')
-  export PUBLIC_GATEWAY_LOGIN=$(get_value '.systems[] | .["public-gateway"]? | .connections[0].HTTP.login')
-  export PUBLIC_GATEWAY_PASSWORD=$(get_value '.systems[] | .["public-gateway"]? | .connections[0].HTTP.password')
+  derive_namespace_and_hostname() {
+    local url="$1"
+    local host namespace_part
 
-  if [ -n "$PUBLIC_GATEWAY_URL" ]; then
+    if [ -z "$url" ]; then
+      export NAMESPACE="unknown"
+      export SERVER_HOSTNAME="unknown"
+      return 0
+    fi
 
-    host=$(echo "$PUBLIC_GATEWAY_URL" | sed -E 's#https?://([^/]+).*#\1#')
+    host=$(printf '%s\n' "$url" | sed -E 's#https?://([^/]+).*#\1#')
 
     if [[ "$host" == public-gateway-*.* ]]; then
-      namespace_part=${host#public-gateway-}
-      export NAMESPACE=${namespace_part%%.*}
+      namespace_part="${host#public-gateway-}"
+      export NAMESPACE="${namespace_part%%.*}"
 
-      if [[ "$host" == public-gateway-$NAMESPACE.* ]]; then
-        export SERVER_HOSTNAME=${host#public-gateway-$NAMESPACE.}
+      if [[ "$host" == public-gateway-"$NAMESPACE".* ]]; then
+        export SERVER_HOSTNAME="${host#public-gateway-$NAMESPACE.}"
       else
         export SERVER_HOSTNAME="$host"
       fi
@@ -34,26 +39,34 @@ load_envgene() {
       export NAMESPACE="unknown"
       export SERVER_HOSTNAME="$host"
     fi
-  else
-    export NAMESPACE="unknown"
-    export SERVER_HOSTNAME="unknown"
-  fi
+  }
 
-  export PRIVATE_GATEWAY_URL=$(get_value '.systems[] | .["private-gateway"]? | .connections[0].HTTP.url')
-  export INTERNAL_GATEWAY_URL=$(get_value '.systems[] | .["internal-gateway"]? | .connections[0].HTTP.url')
-  export OPENSEARCH_URL=$(get_value '.systems[] | .["opensearch"]? | .connections[0].HTTP.url')
-  export HUAWEI_URL=$(get_value '.systems[] | .["huawei"]? | .connections[0].HTTP.url')
-  export HUAWEI_LOGIN=$(get_value '.systems[] | .["huawei"]? | .connections[0].HTTP.login')
-  export HUAWEI_PASSWORD=$(get_value '.systems[] | .["huawei"]? | .connections[0].HTTP.password')
-  export MONITORING_ALARM_ENGINE_URL=$(get_value '.systems[] | .["monitoring-alarm-engine"]? | .connections[0].HTTP.url')
-  export KAFKA_PLATFORM_URL=$(get_value '.systems[] | .["kafka-platform"]? | .connections[0].HTTP.url')
+  while IFS=$'\t' read -r system_name field_name field_value; do
+    [ -z "$system_name" ] && continue
+    [ -z "$field_name" ] && continue
+    [ -z "$field_value" ] && continue
 
-  echo "EnvGene mapped:"
-  echo "   PUBLIC_GATEWAY_URL=$PUBLIC_GATEWAY_URL"
-  echo "   PRIVATE_GATEWAY_URL=$PRIVATE_GATEWAY_URL"
-  echo "   INTERNAL_GATEWAY_URL=$INTERNAL_GATEWAY_URL"
-  echo "   NAMESPACE=$NAMESPACE"
-  echo "   SERVER_HOSTNAME=$SERVER_HOSTNAME"
-  echo "   PUBLIC_GATEWAY_LOGIN=$PUBLIC_GATEWAY_LOGIN"
-  echo "   PUBLIC_GATEWAY_PASSWORD=$PUBLIC_GATEWAY_PASSWORD"
+    env_name="$(to_env_name "${system_name}_${field_name}")"
+    export "${env_name}=${field_value}"
+
+    echo "   ${env_name}=${field_value}"
+  done < <(
+    jq -r '
+      .systems[]
+      | to_entries[]
+      | .key as $system_name
+      | .value.connections[0].HTTP? // empty
+      | to_entries[]
+      | select(.key == "url" or .key == "login" or .key == "password")
+      | select(.value != null and .value != "")
+      | [$system_name, .key, (.value | tostring)]
+      | @tsv
+    ' <<< "$ATP_ENVGENE_CONFIGURATION"
+  )
+
+  derive_namespace_and_hostname "${PUBLIC_GATEWAY_URL:-}"
+
+  echo "Derived values:"
+  echo "   NAMESPACE=${NAMESPACE}"
+  echo "   SERVER_HOSTNAME=${SERVER_HOSTNAME}"
 }
