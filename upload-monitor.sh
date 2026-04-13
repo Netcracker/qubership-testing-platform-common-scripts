@@ -34,6 +34,7 @@ start_inotify_uploader() {
       inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" |
       while read -r NEW_FILE; do
           FILE_NAME=$(basename "$NEW_FILE")
+          echo "📡 Detected new file for upload: $NEW_FILE"
           if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
               upload_file_to_s3 "$NEW_FILE" "$DEST_PATH"
           fi
@@ -48,9 +49,11 @@ upload_file_to_s3() {
     local DEST_PATH="$2"
     
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
+        echo "📤 Uploading file to AWS S3: $FILE_PATH -> $DEST_PATH"
         AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" \
         s5cmd --no-verify-ssl cp "$FILE_PATH" "$DEST_PATH" > /dev/null 2>&1
     else
+        echo "📤 Uploading file to MinIO/S3-compatible storage: $FILE_PATH -> $DEST_PATH"
         AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" \
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$FILE_PATH" "$DEST_PATH" > /dev/null 2>&1
     fi
@@ -61,9 +64,10 @@ start_sync_uploader() {
     local DEST_PATH="$2"
     local FILE_PATTERN="${3:-*}"
     echo "📡 Starting sync uploader for directory: $WATCH_DIR, pattern: $FILE_PATTERN"
-    (
+    (   
       inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" |
       while read -r NEW_FILE; do
+      echo "📡 Detected new file for sync upload: $NEW_FILE"
           FILE_NAME=$(basename "$NEW_FILE")
           #shellcheck disable=SC2233
           if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
@@ -80,9 +84,11 @@ sync_directory_to_s3() {
     local DEST_PATH="$2"
     
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
+        echo "📤 Syncing directory to AWS S3: $SOURCE_DIR -> $DEST_PATH"
         AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" \
         s5cmd --no-verify-ssl sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null 2>&1
     else
+        echo "📤 Syncing directory to MinIO/S3-compatible storage: $SOURCE_DIR -> $DEST_PATH"
         AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" \
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null 2>&1
     fi
