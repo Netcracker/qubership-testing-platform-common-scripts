@@ -43,49 +43,6 @@ run_tests() {
   return "$TEST_EXIT_CODE"
 }
 
-apply_project_patches() {
-  local patch_dir="$1"
-  local patch_root="$2"
-  local fail_on_error="${3:-true}"
-
-  if [ ! -d "$patch_dir" ]; then
-    echo "ℹ️ No patch directory found: $patch_dir"
-    return 0
-  fi
-
-  if ! command -v patch >/dev/null 2>&1; then
-    echo "❌ 'patch' command is not installed"
-    [ "$fail_on_error" = "true" ] && return 1 || return 0
-  fi
-
-  shopt -s nullglob
-  local patches=("$patch_dir"/*.patch)
-  shopt -u nullglob
-
-  if [ ${#patches[@]} -eq 0 ]; then
-    echo "ℹ️ No .patch files found in $patch_dir"
-    return 0
-  fi
-
-  echo "🩹 Applying patches from: $patch_dir"
-  echo "📁 Patch root: $patch_root"
-
-  local patch_file
-  for patch_file in "${patches[@]}"; do
-    echo "🩹 Applying patch: $(basename "$patch_file")"
-
-    if patch --forward --batch -p1 -d "$patch_root" < "$patch_file"; then
-      echo "✅ Patch applied: $(basename "$patch_file")"
-    else
-      echo "❌ Failed to apply patch: $(basename "$patch_file")"
-      if [ "$fail_on_error" = "true" ]; then
-        return 1
-      fi
-    fi
-  done
-
-  return 0
-}
 
 run_collection_body() {
 
@@ -297,10 +254,6 @@ run_bruno_from_test_params() {
 
   cd "$TMP_DIR" || return 1
 
-  if ! apply_project_patches "${TMP_DIR}/bruno-runner/patches" "$TMP_DIR" "true"; then
-    echo "❌ Failed to apply project patches"
-    return 1
-  fi
 
   PATH_TO_ATTACHMENTS_DIR="${TMP_DIR}/attachments"
   PATH_TO_ALLURE_RESULTS="${TMP_DIR}/allure-results"
