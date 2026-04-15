@@ -297,7 +297,7 @@ run_bruno_from_test_params() {
 
   cd "$TMP_DIR" || return 1
 
-  if ! apply_project_patches "${TMP_DIR}/bruno-runner/patches" "/app" "true"; then
+  if ! apply_project_patches "${TMP_DIR}/bruno-runner/patches" "$TMP_DIR" "true"; then
     echo "❌ Failed to apply project patches"
     return 1
   fi
