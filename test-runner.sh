@@ -244,7 +244,7 @@ run_bruno_from_test_params() {
     echo "⚠ No collections provided — discovering all Bruno collections automatically"
 
     mapfile -t BRUNO_COLLECTIONS_ARRAY < <(
-      find collections -mindepth 1 -maxdepth 1 -type f -name "collection.bru" \
+      find collections -mindepth 2 -maxdepth 2 -type f -name "collection.bru" \
         ! -path "*/.git/*" \
         ! -path "*/node_modules/*" \
         -printf '%h\n' | sort -u
