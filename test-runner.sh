@@ -94,7 +94,10 @@ run_collection_body() {
       echo "➡ Running full collection"
       echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=full time=$(date '+%H:%M:%S')"
 
-      if ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
+      COLLECTION_TIMEOUT="${COLLECTION_TIMEOUT:-1800}"
+
+      if timeout --signal=TERM --kill-after=30s "${COLLECTION_TIMEOUT}s" \
+        ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
         --reporter-json "${bruno_report_path}" \
@@ -136,10 +139,12 @@ EOF
       echo "➡ Running folders: ${RESOLVED_FOLDERS[*]}"
       echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=folders time=$(date '+%H:%M:%S')"
 
-      if ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
+      COLLECTION_TIMEOUT="${COLLECTION_TIMEOUT:-1800}"
+
+      if timeout --signal=TERM --kill-after=30s "${COLLECTION_TIMEOUT}s" \
+        ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
-        "${RESOLVED_FOLDERS[@]}" \
         --reporter-json "${bruno_report_path}" \
         >"${raw_log_path}" 2>&1; then
         echo "✅ SUCCESS: $collection_name"
@@ -236,16 +241,16 @@ run_bruno_from_test_params() {
   extract_bruno_env "$TEST_PARAMS" "BRUNO_ENV_STR"
   extract_bruno_collections "$TEST_PARAMS" "BRUNO_COLLECTIONS_ARRAY"
   if [ ${#BRUNO_COLLECTIONS_ARRAY[@]} -eq 0 ]; then
-    echo "⚠ No collections provided — discovering all collections automatically"
+    echo "⚠ No collections provided — discovering all Bruno collections automatically"
 
     mapfile -t BRUNO_COLLECTIONS_ARRAY < <(
-      find collections -mindepth 1 -maxdepth 1 -type d \
-      ! -name ".git" \
-      ! -name "node_modules" \
-      | sort
+      find collections -mindepth 1 -maxdepth 1 -type f -name "collection.bru" \
+        ! -path "*/.git/*" \
+        ! -path "*/node_modules/*" \
+        -printf '%h\n' | sort -u
     )
 
-    echo "📦 Discovered collections:"
+    echo "📦 Discovered Bruno collections:"
     printf "  - %s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
   fi
   extract_bruno_env_vars "$TEST_PARAMS" "BRUNO_ENV_VARS_CLI"
@@ -303,7 +308,7 @@ run_bruno_from_test_params() {
 
 export BRUNO_FOLDERS_STR
 
-  PARALLELISM=${PARALLELISM:-2}
+  PARALLELISM=${PARALLELISM:-4}
   echo "Collections to run:"
   printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
   echo "Total collections: ${#BRUNO_COLLECTIONS_ARRAY[@]}"
