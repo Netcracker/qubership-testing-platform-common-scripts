@@ -35,39 +35,21 @@ finalize_once() {
     # downstream pipeline stages (e.g. "get ATP report file") receive a valid
     # FAILED payload instead of finding no file at all.
     if [ "$rc" -ne 0 ]; then
-      echo "⚠️  Non-zero exit detected — writing error-state JSON before cleanup."
-      local output_dir="/tmp/clone/scripts/email-notification-generated"
-      local output_file="$output_dir/email-notification-results-generated.json"
-      local timestamp
-      timestamp="$(date '+%Y-%m-%d %H:%M:%S UTC')"
-      local execution_date
-      execution_date="$(date '+%Y-%m-%d %H:%M:%S')"
-      mkdir -p "$output_dir"
-      cat > "$output_file" <<EOF
-{
-  "test_results": {
-    "overall_status": "FAILED",
-    "pass_rate": 0,
-    "pass_rate_rounded": 0,
-    "total_count": 0,
-    "passed_count": 0,
-    "failed_count": 0,
-    "skipped_count": 0,
-    "failure_rate": 0,
-    "coverage": 0
-  },
-  "execution_info": {
-    "execution_date": "$execution_date",
-    "timestamp": "$timestamp",
-    "environment_name": "${ENVIRONMENT_NAME:-Unknown}",
-    "atp_report_view_ui_url": "${ATP_REPORT_VIEW_UI_URL:-}",
-    "allure_report_url": ""
-  },
-  "test_details": [],
-  "error": "${FAIL_MESSAGE:-Unknown error}"
-}
-EOF
-      echo "📄 Error-state JSON written to: $output_file"
+      echo "⚠️  Non-zero exit detected — pre-seeding error-state variables for generate_email_notification_json."
+      # Pre-export the variables that generate_email_notification_json reads.
+      # calculate-email-notification-variables.sh will bail early (no allure results),
+      # leaving these values intact so the downstream JSON reflects the fatal error.
+      export TEST_OVERALL_STATUS="FAILED"
+      export TEST_PASS_RATE=0
+      export TEST_PASS_RATE_ROUNDED=0
+      export TEST_TOTAL_COUNT=0
+      export TEST_PASSED_COUNT=0
+      export TEST_FAILED_COUNT=0
+      export TEST_SKIPPED_COUNT=0
+      export TEST_COVERAGE=0
+      export TEST_DETAILS_STRING=""
+      export EXECUTION_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
+      export TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S UTC')"
     fi
 
     generate_email_notification_json || true
