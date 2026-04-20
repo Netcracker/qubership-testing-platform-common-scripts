@@ -61,6 +61,11 @@ generate_email_notification_json() {
     EXECUTION_DATE="${EXECUTION_DATE:-$(date '+%Y-%m-%d %H:%M:%S')}"
     TEST_COVERAGE="${TEST_COVERAGE:-100.00}"
     ATP_REPORT_VIEW_UI_URL="${ATP_REPORT_VIEW_UI_URL:-https://example.com}"
+    if [[ "${ATP_REPORT_VIEW_UI_URL}" == Test\ not\ started* ]]; then
+        ALLURE_REPORT_URL="${ATP_REPORT_VIEW_UI_URL}"
+    else
+        ALLURE_REPORT_URL="${ATP_REPORT_VIEW_UI_URL}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/index.html"
+    fi
     ALLURE_REPORT_URL="${ATP_REPORT_VIEW_UI_URL}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/index.html"
     TIMESTAMP="${TIMESTAMP:-$(date '+%Y-%m-%d %H:%M:%S UTC')}"
 
