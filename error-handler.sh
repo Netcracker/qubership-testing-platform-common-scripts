@@ -1,27 +1,49 @@
 #!/bin/bash
 
-# Centralized error handler for graceful pod termination.
-# Always exits with code 0 so Argo does not hang, while propagating
-# failure status to downstream pipeline stages via an error-state JSON
-# written to S3 (the same path that stage 4 "get ATP report file" reads).
+# Centralized error handler and exit-trap for graceful pod termination.
+#
+# fail()         — logs the error, stores its message, and exits 1.
+# finalize_once() — the single EXIT trap: writes error-state JSON when rc≠0,
+#                   runs all cleanup, then always exits 0 so Argo does not hang.
+#
+# Register the trap in entrypoint.sh AFTER all scripts are sourced:
+#   trap 'finalize_once' EXIT
+
+# Stores the fatal error message so finalize_once can embed it in the error JSON.
+FAIL_MESSAGE=""
+FINALIZE_DONE=false
 
 fail() {
     local error_message="${1:-Unknown error}"
     echo "❌ FATAL: $error_message"
-    echo "⚠️  Writing error-state JSON and exiting with code 0 to prevent pod hang."
+    echo "⚠️  Delegating cleanup to EXIT trap (finalize_once)."
+    FAIL_MESSAGE="$error_message"
+    exit 1
+}
 
-    local output_dir="/tmp/clone/scripts/email-notification-generated"
-    local output_file="$output_dir/error-details-results-generated.json"
-    local timestamp
-    timestamp="$(date '+%Y-%m-%d %H:%M:%S UTC')"
-    local execution_date
-    execution_date="$(date '+%Y-%m-%d %H:%M:%S')"
+#shellcheck disable=SC2329
+finalize_once() {
+  local rc=$?
 
-    mkdir -p "$output_dir"
+  if [ "$FINALIZE_DONE" != "true" ]; then
+    FINALIZE_DONE=true
+    echo "🔄 EXIT trap triggered with rc=$rc"
 
-    # Write a minimal error-state JSON that matches the schema consumed by
-    # the downstream "get ATP report file" pipeline stage.
-    cat > "$output_file" <<EOF
+    set +e
+
+    # When fail() triggered the exit, write a minimal error-state JSON so
+    # downstream pipeline stages (e.g. "get ATP report file") receive a valid
+    # FAILED payload instead of finding no file at all.
+    if [ "$rc" -ne 0 ]; then
+      echo "⚠️  Non-zero exit detected — writing error-state JSON before cleanup."
+      local output_dir="/tmp/clone/scripts/email-notification-generated"
+      local output_file="$output_dir/email-notification-results-generated.json"
+      local timestamp
+      timestamp="$(date '+%Y-%m-%d %H:%M:%S UTC')"
+      local execution_date
+      execution_date="$(date '+%Y-%m-%d %H:%M:%S')"
+      mkdir -p "$output_dir"
+      cat > "$output_file" <<EOF
 {
   "test_results": {
     "overall_status": "FAILED",
@@ -42,37 +64,20 @@ fail() {
     "allure_report_url": ""
   },
   "test_details": [],
-  "error": "$error_message"
+  "error": "${FAIL_MESSAGE:-Unknown error}"
 }
 EOF
-
-    echo "📄 Error JSON written to: $output_file"
-
-    # Best-effort S3 upload — skip silently if credentials are unavailable.
-    if [ -n "${AWS_ACCESS_KEY_ID:-}" ] || [ -n "${_LOCAL_S3_KEY:-}" ]; then
-        local results_s3_path="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
-        local dest="${results_s3_path}email-notification-generated/error-details-results-generated.json"
-
-        # Restore credentials if they were cleared before this call.
-        local upload_key="${AWS_ACCESS_KEY_ID:-$_LOCAL_S3_KEY}"
-        local upload_secret="${AWS_SECRET_ACCESS_KEY:-$_LOCAL_S3_SECRET}"
-
-        echo "📤 Uploading error JSON to S3: $dest"
-        if [[ "${ATP_STORAGE_PROVIDER:-}" == "aws" ]]; then
-            AWS_ACCESS_KEY_ID="$upload_key" AWS_SECRET_ACCESS_KEY="$upload_secret" \
-                s5cmd --no-verify-ssl cp "$output_file" "$dest" 2>/dev/null || \
-                echo "⚠️  S3 upload failed (non-fatal)."
-        elif [[ "${ATP_STORAGE_PROVIDER:-}" == "minio" || "${ATP_STORAGE_PROVIDER:-}" == "s3" ]]; then
-            AWS_ACCESS_KEY_ID="$upload_key" AWS_SECRET_ACCESS_KEY="$upload_secret" \
-                s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$output_file" "$dest" 2>/dev/null || \
-                echo "⚠️  S3 upload failed (non-fatal)."
-        else
-            echo "⚠️  ATP_STORAGE_PROVIDER not set or unrecognised — skipping S3 upload."
-        fi
-    else
-        echo "⚠️  No S3 credentials available — skipping S3 upload (error visible in pod logs only)."
+      echo "📄 Error-state JSON written to: $output_file"
     fi
 
-    echo "🏁 Exiting with code 0 to allow Argo to continue pipeline."
-    exit 0
+    generate_email_notification_json || true
+    save_native_report "$TMP_DIR/${NATIVE_REPORT_DIR:-playwright-report}" || true
+    finalize_upload || true
+    sleep 15
+
+    set -e
+  fi
+
+  # Always exit 0 so Argo/Kubernetes does not treat this pod as failed and hang.
+  exit 0
 }
