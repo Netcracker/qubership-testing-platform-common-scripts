@@ -94,19 +94,22 @@ run_collection_body() {
       echo "➡ Running full collection"
       echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=full time=$(date '+%H:%M:%S')"
 
-      COLLECTION_TIMEOUT="${COLLECTION_TIMEOUT:-1800}"
+      COLLECTION_TIMEOUT="${COLLECTION_TIMEOUT:-3600}"
 
       if timeout --signal=TERM --kill-after=30s "${COLLECTION_TIMEOUT}s" \
         ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
         --reporter-json "${bruno_report_path}" \
-        >"${raw_log_path}" 2>&1; then
+        2>&1 | tee "${raw_log_path}"; then
         echo "✅ SUCCESS: $collection_name"
       else
-        rc=$?
+        rc=${PIPESTATUS[0]}
         echo "❌ FAILED: $collection_name rc=$rc"
-        TOTAL_FAILED=0
+        echo "----- LAST 200 LINES: $collection_name -----"
+        tail -n 200 "${raw_log_path}" || true
+        echo "--------------------------------------------"
+        TOTAL_FAILED=1
       fi
 
       echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
@@ -139,18 +142,21 @@ EOF
       echo "➡ Running folders: ${RESOLVED_FOLDERS[*]}"
       echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=folders time=$(date '+%H:%M:%S')"
 
-      COLLECTION_TIMEOUT="${COLLECTION_TIMEOUT:-1800}"
+      COLLECTION_TIMEOUT="${COLLECTION_TIMEOUT:-3600}"
 
       if timeout --signal=TERM --kill-after=30s "${COLLECTION_TIMEOUT}s" \
         ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
         --reporter-json "${bruno_report_path}" \
-        >"${raw_log_path}" 2>&1; then
+        2>&1 | tee "${raw_log_path}"; then
         echo "✅ SUCCESS: $collection_name"
       else
-        rc=$?
+        rc=${PIPESTATUS[0]}
         echo "❌ FAILED: $collection_name rc=$rc"
+        echo "----- LAST 200 LINES: $collection_name -----"
+        tail -n 200 "${raw_log_path}" || true
+        echo "--------------------------------------------"
         TOTAL_FAILED=1
       fi
 
