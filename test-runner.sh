@@ -30,7 +30,9 @@ run_tests() {
     ./start_tests.sh || TEST_EXIT_CODE=$?
 
     TEST_EXIT_CODE=${TEST_EXIT_CODE:-0}
-    echo "ℹ️ Test script exited with code: $TEST_EXIT_CODE (but continuing...)"
-    
-    echo "✅ Test execution completed"
+    if [ $TEST_EXIT_CODE -ne 0 ]; then
+        fail "Test suite failed with code: $TEST_EXIT_CODE"
+    else
+        echo "✅ Test suite completed successfully"
+    fi
 } 
