@@ -18,6 +18,7 @@ fail() {
     echo "❌ FATAL: $error_message"
     echo "⚠️  Delegating cleanup to EXIT trap (finalize_once)."
     FAIL_MESSAGE="$error_message"
+    # Catched by EXIT trap and goes to finalize_once()
     exit 1
 }
 
