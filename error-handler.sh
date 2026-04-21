@@ -51,8 +51,8 @@ finalize_once() {
       export TEST_DETAILS_STRING=""
       export EXECUTION_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
       export TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S UTC')"
-      export ALLURE_REPORT_URL="Test error. Please check the logs for more details. $FAIL_MESSAGE."
-      export ATP_REPORT_VIEW_UI_URL="Test error. Please check the logs for more details. $FAIL_MESSAGE."
+      export ALLURE_REPORT_URL="Test not started. Please check the logs for more details. $FAIL_MESSAGE. "
+      export ATP_REPORT_VIEW_UI_URL="Test not started. Please check the logs for more details. $FAIL_MESSAGE. "
     fi
 
     generate_email_notification_json || true
