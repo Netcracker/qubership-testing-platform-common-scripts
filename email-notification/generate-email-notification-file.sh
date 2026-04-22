@@ -18,19 +18,35 @@ generate_email_notification_file() {
     
     # Logging functions
     log_info() {
-        echo "ℹ️ $1"
+        if command -v log > /dev/null 2>&1; then
+            log "ℹ️ $1"
+        else
+            echo "ℹ️ $1"
+        fi
     }
 
     log_success() {
-        echo "✅ $1"
+        if command -v log > /dev/null 2>&1; then
+            log "✅ $1"
+        else
+            echo "✅ $1"
+        fi
     }
 
     log_warning() {
-        echo "⚠️ $1"
+        if command -v log > /dev/null 2>&1; then
+            log "⚠️ $1"
+        else
+            echo "⚠️ $1"
+        fi
     }
 
     log_error() {
-        echo "❌ $1"
+        if command -v log > /dev/null 2>&1; then
+            log "❌ $1"
+        else
+            echo "❌ $1"
+        fi
     }
 
     # Get script directory

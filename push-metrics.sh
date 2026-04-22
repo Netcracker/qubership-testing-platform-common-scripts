@@ -106,8 +106,12 @@ _push_to_endpoint() {
 
     echo "ℹ️ push_metrics [${label}]: Pushing metrics to ${url}"
 
-    if printf "%b" "$payload" | curl "${curl_args[@]}" "$url"; then
-        echo "✅ push_metrics [${label}]: Metrics pushed successfully."
+    # Send request and capture both response body and HTTP code
+    response_and_code=$(printf "%b" "$payload" | curl "${curl_args[@]}" --write-out "\n%{http_code}" "$url")
+    http_code=$(echo "$response_and_code" | tail -n1)
+
+    if [[ "$http_code" =~ ^20 ]]; then
+        echo "✅ push_metrics [${label}]: Metrics pushed successfully. HTTP status code: $http_code"
         return 0
     fi
     echo "❌ push_metrics [${label}]: Failed to push metrics to ${url}"

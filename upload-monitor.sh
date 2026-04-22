@@ -2,7 +2,7 @@
 
 # Event-based upload monitoring module
 start_upload_monitoring() {
-    echo "📡 Starting event-based upload monitoring..."
+    log "📡 Starting event-based upload monitoring..."
     
     # Prepare common S3 paths
     RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
@@ -16,19 +16,19 @@ start_upload_monitoring() {
     # Store credentials for background processes (local variables, not exported)
     _BACKGROUND_S3_KEY="$_LOCAL_S3_KEY"
     _BACKGROUND_S3_SECRET="$_LOCAL_S3_SECRET"
-    
+
     # Choose upload method based on environment variable
     if [[ "${UPLOAD_METHOD:-cp}" == "sync" ]]; then
-        echo "🔄 Using sync-based upload monitoring (inotifywait + sync)"
+        log "🔄 Using sync-based upload monitoring (inotifywait + sync)"
         start_sync_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
         start_sync_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
     else
-        echo "📁 Using file-based upload monitoring (inotifywait + cp)"
+        log "📁 Using file-based upload monitoring (inotifywait + cp)"
         start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
         start_inotify_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
     fi
     
-    echo "✅ Upload monitoring started"
+    log "✅ Upload monitoring started"
 }
 
 # Inotify uploader function
@@ -37,22 +37,22 @@ start_inotify_uploader() {
     DEST_PATH="$2"
     FILE_PATTERN="${3:-*}"  # Optional filename filter (e.g. *result.json)
 
-    echo "📡 Starting inotify uploader for $WATCH_DIR => $DEST_PATH (filter: $FILE_PATTERN)"
+    log "📡 Starting inotify uploader for $WATCH_DIR => $DEST_PATH (filter: $FILE_PATTERN)"
 
     # Pass credentials as environment variables only for this process
     inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read NEW_FILE; do
         FILE_NAME=$(basename "$NEW_FILE")
         if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
-            echo "🆕 Matching file: $FILE_NAME"
+            log "🆕 Matching file: $FILE_NAME"
             upload_file_to_s3 "$NEW_FILE" "$DEST_PATH"
         else
-            echo "⚠️ Ignored file: $FILE_NAME"
+            log "⚠️ Ignored file: $FILE_NAME"
         fi
     done &
     
     # Store the background process PID
     INOTIFY_PID=$!
-    echo "📡 Inotify process started with PID: $INOTIFY_PID"
+    log "📡 Inotify process started with PID: $INOTIFY_PID"
 }
 
 # Upload file to S3/MinIO
@@ -74,22 +74,22 @@ start_sync_uploader() {
     DEST_PATH="$2"
     FILE_PATTERN="${3:-*}"  # Optional filename filter
 
-    echo "🔄 Starting sync uploader for $WATCH_DIR => $DEST_PATH (filter: $FILE_PATTERN)"
+    log "🔄 Starting sync uploader for $WATCH_DIR => $DEST_PATH (filter: $FILE_PATTERN)"
 
     # Pass credentials as environment variables only for this process
     inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read NEW_FILE; do
         FILE_NAME=$(basename "$NEW_FILE")
         if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
-            echo "🆕 Matching file: $FILE_NAME - triggering sync"
+            log "🆕 Matching file: $FILE_NAME - triggering sync"
             sync_directory_to_s3 "$WATCH_DIR" "$DEST_PATH"
         #else
-        #    echo "⚠️ Ignored file: $FILE_NAME"
+        #    log "⚠️ Ignored file: $FILE_NAME"
         fi
     done &
     
     # Store the background process PID
     SYNC_PID=$!
-    echo "🔄 Sync process started with PID: $SYNC_PID"
+    log "🔄 Sync process started with PID: $SYNC_PID"
 }
 
 # Sync directory to S3/MinIO
@@ -107,7 +107,7 @@ sync_directory_to_s3() {
 
 # Finalize upload after tests
 finalize_upload() {
-    echo "🔄 Finalizing upload operations..."
+    log "🔄 Finalizing upload operations..."
     
     # Prepare common S3 paths
     RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
@@ -149,11 +149,11 @@ finalize_upload() {
     final_cleanup
 
     echo ""
-    echo "Results are available at: ${RESULTS_URL}"
-    echo "Reports are available at: ${REPORTS_URL}"
-    echo "Report view is available at: ${ATP_REPORT_VIEW_UI_URL}/${REPORTS_FOLDER_PATH}index.html"
+    log "Results are available at: ${RESULTS_URL}"
+    log "Reports are available at: ${REPORTS_URL}"
+    log "Report view is available at: ${ATP_REPORT_VIEW_UI_URL}/${REPORTS_FOLDER_PATH}index.html"
     
-    echo "✅ Upload finalization completed"
+    log "✅ Upload finalization completed"
 }
 
 # Generate URLs for results
@@ -174,7 +174,7 @@ generate_result_urls() {
 
 # Clear sensitive environment variables
 clear_sensitive_vars() {
-    echo "🔐 Clearing sensitive environment variables..."
+    log "🔐 Clearing sensitive environment variables..."
     unset AWS_ACCESS_KEY_ID
     unset AWS_SECRET_ACCESS_KEY
     unset ATP_STORAGE_USERNAME
@@ -183,18 +183,18 @@ clear_sensitive_vars() {
 
 # Restore AWS credentials for final operations
 restore_aws_credentials() {
-    echo "🔑 Restoring AWS credentials for final operations..."
+    log "🔑 Restoring AWS credentials for final operations..."
     export AWS_ACCESS_KEY_ID="$_LOCAL_S3_KEY"
     export AWS_SECRET_ACCESS_KEY="$_LOCAL_S3_SECRET"
 }
 
 # Final cleanup of all credentials
 final_cleanup() {
-    echo "🧹 Final cleanup of all credentials..."
+    log "🧹 Final cleanup of all credentials..."
     unset AWS_ACCESS_KEY_ID
     unset AWS_SECRET_ACCESS_KEY
     unset _LOCAL_S3_KEY
     unset _LOCAL_S3_SECRET
     unset _BACKGROUND_S3_KEY
     unset _BACKGROUND_S3_SECRET
-} 
+}
