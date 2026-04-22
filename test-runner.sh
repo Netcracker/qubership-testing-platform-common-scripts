@@ -327,19 +327,38 @@ export BRUNO_FOLDERS_STR
   echo "✅ PARALLEL PHASE START time=$(date '+%H:%M:%S')"
 
   running_jobs=0
+  active_collection_pids=()
+
+  wait_for_collection_slot() {
+    while true; do
+      for idx in "${!active_collection_pids[@]}"; do
+        local pid="${active_collection_pids[$idx]}"
+
+        if ! kill -0 "$pid" 2>/dev/null; then
+          wait "$pid" || true
+          unset 'active_collection_pids[idx]'
+          active_collection_pids=("${active_collection_pids[@]}")
+          return 0
+        fi
+      done
+
+      sleep 1
+    done
+  }
 
   for collection in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
     bash -c 'run_collection_body "$1"' _ "$collection" &
+    active_collection_pids+=("$!")
     running_jobs=$((running_jobs + 1))
 
     if [ "$running_jobs" -ge "$PARALLELISM" ]; then
-      wait -n || true
+      wait_for_collection_slot
       running_jobs=$((running_jobs - 1))
     fi
   done
 
   while [ "$running_jobs" -gt 0 ]; do
-    wait -n || true
+    wait_for_collection_slot
     running_jobs=$((running_jobs - 1))
   done
 
