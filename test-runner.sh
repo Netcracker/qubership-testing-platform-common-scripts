@@ -175,7 +175,7 @@ EOF
       count=$(jq 'if type=="array" then (if (.[0]?|type)=="object" and (.[0]?|has("results")) then ([.[].results[]]|length) else length end) elif type=="object" and has("results") then (.results|length) else 0 end' "$bruno_report_path")
       echo "📊 $collection_name → $count tests"
       printf "%s,%s\n" "$collection_name" "$count" >> "$TMP_DIR/tests_count.csv"
-      node /app/scripts/bruno-to-allure.js  \
+      node /scripts/bruno-to-allure.js  \
         "$bruno_report_path" \
         "$PATH_TO_ALLURE_RESULTS" \
         "$collection_name"
@@ -240,7 +240,7 @@ run_bruno_from_test_params() {
   echo "🚀 Bruno execution with EnvGene "
 
   # shellcheck disable=SC1091
-  source /app/scripts/bru_tools.sh
+  source /scripts/bru_tools.sh
 
   check_env_var "TEST_PARAMS" ""
 
