@@ -3,8 +3,6 @@
 run_tests() {
   echo "▶ Starting test execution..."
 
-  set -o pipefail
-
   # shellcheck disable=SC1091
   if [ -f "/app/scripts/upload-monitor.sh" ]; then
     source "/app/scripts/upload-monitor.sh"
