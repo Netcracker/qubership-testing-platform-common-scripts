@@ -20,12 +20,12 @@ start_upload_monitoring() {
     # Choose upload method based on environment variable
     if [[ "${UPLOAD_METHOD:-cp}" == "sync" ]]; then
         echo "🔄 Using sync-based upload monitoring (inotifywait + sync)"
-        start_sync_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
-        start_sync_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
+        start_sync_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" 
+        start_sync_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" 
     else
         echo "📁 Using file-based upload monitoring (inotifywait + cp)"
-        start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
-        start_inotify_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
+        start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" 
+        start_inotify_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" 
     fi
     
     echo "✅ Upload monitoring started"
