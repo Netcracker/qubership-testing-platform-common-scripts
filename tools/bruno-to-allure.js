@@ -3,10 +3,9 @@
 
 const fs = require("fs");
 const path = require("path");
+const { randomUUID } = require("node:crypto");
 const { URL } = require("node:url");
-const { v4: uuidv4 } = require("uuid");
 
-// args: brunoReportPath, allureResultsDir
 const args = process.argv.slice(2);
 const brunoReportPath = args[0];
 const allureResultsDir = args[1] || path.join(__dirname, "allure-results");
@@ -133,7 +132,7 @@ try {
 
   const children = [];
   for (const test of results) {
-    const id = uuidv4();
+    const id = randomUUID();
     const timestamp = test.timestamp ? new Date(test.timestamp).getTime() : Date.now();
     const duration = test.response?.responseTime ?? test.duration ?? 0;
 
@@ -153,7 +152,7 @@ try {
 
     const allureResult = {
       uuid: id,
-      historyId: uuidv4(),
+      historyId: randomUUID(),
       name: test.name || `${test.request?.method || "GET"} ${test.request?.url || ""}`,
       fullName: `${packageName}.${test.name || "test"}`,
       status: finalStatus,
@@ -191,7 +190,7 @@ try {
   }
 
   const container = {
-    uuid: uuidv4(),
+    uuid: randomUUID(),
     children: children,
     befores: [],
     afters: [],
@@ -199,7 +198,7 @@ try {
     stop: Date.now()
   };
   fs.writeFileSync(
-    path.join(allureResultsDir, `${uuidv4()}-container.json`),
+    path.join(allureResultsDir, `${randomUUID()}-container.json`),
     JSON.stringify(container, null, 2)
   );
   console.log(`✅ Successfully converted Bruno report to Allure format. Results saved in: ${allureResultsDir}`);
