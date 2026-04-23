@@ -5,6 +5,7 @@
 
 render_environment_configuration() {
     local template_filename="${ENV_CONFIGURATION_TEMPLATE_FILENAME:-environment-configuration-template.json}"
+    local debug_mode="${DEBUG_MODE:-false}"
     local template_path="${TMP_DIR}/environment-configuration/${template_filename}"
     local output_path="${TMP_DIR}/environment-configuration.json"
     local template_content rendered_content placeholders placeholder var_name var_value
@@ -62,9 +63,13 @@ render_environment_configuration() {
         echo "⚠️ Rendering completed with missing variables: ${missing_vars[*]}"
     fi
 
-    # Temporary debug output: print rendered configuration content to console.
-    echo "🧪 DEBUG: Rendered environment configuration content (temporary log):"
-    printf '%s\n' "$rendered_content"
+    # Debug mode output
+    case "${debug_mode,,}" in
+        1|true|yes|on)
+            echo "🧪 DEBUG: Rendered environment configuration content:"
+            printf '%s\n' "$rendered_content"
+            ;;
+    esac
 
     echo "✅ Environment configuration rendered and saved to: $output_path"
     echo "✅ Exported rendered configuration to ATP_ENVGENE_CONFIGURATION and ENV_SYSTEMS"
