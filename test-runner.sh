@@ -149,6 +149,7 @@ EOF
         --env "${BRUNO_ENV_STR}" \
         ${BRUNO_ENV_VARS_CLI} \
         --reporter-json "${bruno_report_path}" \
+        "${RESOLVED_FOLDERS[@]}" \
         2>&1 | tee "${raw_log_path}"; then
         echo "✅ SUCCESS: $collection_name"
       else
