@@ -269,7 +269,7 @@ run_bruno_from_test_params() {
 
   PATH_TO_ATTACHMENTS_DIR="${TMP_DIR}/attachments"
   PATH_TO_ALLURE_RESULTS="${TMP_DIR}/allure-results"
-  rm -rf "$PATH_TO_ATTACHMENTS_DIR" "$PATH_TO_ALLURE_RESULTS" "$TMP_DIR/allure-report"
+  rm -rf "$PATH_TO_ATTACHMENTS_DIR" "$PATH_TO_ALLURE_RESULTS"
   mkdir -p "$PATH_TO_ATTACHMENTS_DIR"
   mkdir -p "$PATH_TO_ALLURE_RESULTS"
   : > "$TMP_DIR/tests_count.csv"
@@ -367,24 +367,7 @@ export BRUNO_FOLDERS_STR
 
   echo "✅ PARALLEL PHASE END time=$(date '+%H:%M:%S') took=$((parallel_end_ts-parallel_start_ts))s"
 
-  echo "📊 Generating Allure HTML report..."
-  if npx allure --version >/dev/null 2>&1; then
-    if npx allure generate "$PATH_TO_ALLURE_RESULTS" -o "$TMP_DIR/allure-report" --clean; then
-      if [ -f "$TMP_DIR/allure-report/index.html" ]; then
-        echo "✅ Allure report generated: $TMP_DIR/allure-report (index.html present)"
-      else
-        echo "⚠️ Allure report directory created but index.html missing"
-        ls -la "$TMP_DIR/allure-report" || true
-      fi
-    else
-      echo "⚠️ Allure report generation failed (will continue, results will still be uploaded)"
-    fi
-  else
-    echo "⚠️ Allure CLI not found in PATH, skipping HTML report generation"
-  fi
-
-  # echo " DEBUG ALLURE RESULTS "
-  # ls -la "$PATH_TO_ALLURE_RESULTS"
+  
   echo "==== TEST COUNT BY COLLECTION ===="
   sort "$TMP_DIR/tests_count.csv"
   echo "-----------------------------------------"

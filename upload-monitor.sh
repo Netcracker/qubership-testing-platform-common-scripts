@@ -122,16 +122,10 @@ finalize_upload() {
         s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
         s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
         s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/"
-        if [ -d "$TMP_DIR/allure-report" ]; then
-            s5cmd --no-verify-ssl sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
-        fi
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/"
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH"
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/"
-        if [ -d "$TMP_DIR/allure-report" ]; then
-            s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-report/" "${REPORTS_S3_PATH}allure-report/"
-        fi
     fi
 
     # Upload marker file
