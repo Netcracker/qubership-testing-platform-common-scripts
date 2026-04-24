@@ -119,7 +119,7 @@ echo "$json_content"
 
 # Or use exported variables
 echo "JSON file: $JSON_FILE"
-
+echo "Content: $GENERATED_JSON"
 
 # File will be saved to: ../email-notification-generated/email-notification-results-generated.json
 ```

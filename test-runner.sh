@@ -21,6 +21,28 @@ run_tests() {
   echo "🔐 Clearing sensitive environment variables before tests..."
   clear_sensitive_vars
 
+
+    # Generate trace id
+    if command -v generate_trace_id > /dev/null 2>&1; then
+        generate_trace_id
+    else
+        log "❌ generate_trace_id not found!"
+        if [ -f "/app/scripts/trace-init.sh" ]; then
+            source "/app/scripts/trace-init.sh"
+            generate_trace_id
+        else
+            log "❌ trace-init.sh not found!"
+        fi
+        log "Skipping trace id generation..."
+    fi
+
+    # Bootstrap OTel SDK for all Node.js processes so trace headers are propagated
+    # on outgoing HTTP requests.  Must be set after generate_trace_id so TRACEPARENT
+    # is already exported.  The ${NODE_OPTIONS:+ ...} idiom preserves any existing
+    # NODE_OPTIONS value set by the caller.
+    export NODE_OPTIONS="--require /app/tracing.js${NODE_OPTIONS:+ $NODE_OPTIONS}"
+    log "OTel tracing bootstrap configured via NODE_OPTIONS"
+
   echo "🚀 Running test suite..."
 
   if [ -f "./start_tests.sh" ]; then
