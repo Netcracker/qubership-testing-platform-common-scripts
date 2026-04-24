@@ -313,7 +313,7 @@ run_bruno_from_test_params() {
     BRUNO_FOLDERS_STR=""
   fi
 
-export BRUNO_FOLDERS_STR
+  export BRUNO_FOLDERS_STR
 
   PARALLELISM=${PARALLELISM:-4}
   echo "Collections to run:"
