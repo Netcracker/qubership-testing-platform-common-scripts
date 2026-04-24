@@ -22,17 +22,17 @@ generate_email_notification_json() {
     log_success() {
         echo "✅ $1"
     }
-
+    # shellcheck disable=SC2329
     log_warning() {
         echo "⚠️ $1"
     }
-
+    # shellcheck disable=SC2329
     log_error() {
         echo "❌ $1"
     }
-
     # Get script directory
-    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local SCRIPT_DIR
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
     # Set allure results directory to default location
     local allure_results_dir="/tmp/clone/allure-results"
@@ -50,7 +50,8 @@ generate_email_notification_json() {
 
     # Calculate additional metrics
     if [ -n "${TEST_TOTAL_COUNT:-}" ] && [ "$TEST_TOTAL_COUNT" -gt 0 ]; then
-        TEST_FAILURE_RATE=$(awk "BEGIN {printf \"%.2f\", $TEST_FAILED_COUNT * 100 / $TEST_TOTAL_COUNT}")
+        TEST_FAILURE_RATE=$(awk -v failed="$TEST_FAILED_COUNT" -v total="$TEST_TOTAL_COUNT" \
+        'BEGIN { if (total > 0) printf "%.2f", failed * 100 / total; else print "0.00" }')
     else
         TEST_FAILURE_RATE="0.00"
     fi
@@ -82,6 +83,8 @@ generate_email_notification_json() {
                 local status_part="${BASH_REMATCH[1]// /}"
                 # Keep test name exactly as is (no formatting applied)
                 local test_name="${BASH_REMATCH[2]}"
+                test_name=$(printf '%s' "$test_name" | jq -R .)
+                test_name=${test_name:1:-1}
                 
                 
                 # Determine status and emoji
@@ -118,8 +121,12 @@ generate_email_notification_json() {
         for result_file in "$allure_results_dir"/*-result.json; do
             if [ -f "$result_file" ]; then
                 # Extract test status and name using jq
-                local status=$(jq -r '.status' "$result_file" 2>/dev/null || echo "unknown")
-                local test_name=$(jq -r '.name' "$result_file" 2>/dev/null || echo "Unknown Test")
+                local status
+                status=$(jq -r '.status' "$result_file" 2>/dev/null || echo "unknown")
+                local test_name
+                test_name=$(jq -r '.name' "$result_file" 2>/dev/null || echo "Unknown Test")
+                test_name=$(printf '%s' "$test_name" | jq -R .)
+                test_name=${test_name:1:-1}
                 
                 # Determine status and emoji
                 local emoji="❓"
@@ -230,10 +237,11 @@ generate_email_notification_json() {
 
 
     # Export the JSON content as environment variable for use in other scripts
-    export GENERATED_JSON="$json_content"
     export JSON_FILE="$output_file"
 
-    log_info "Environment variables exported: GENERATED_JSON, JSON_FILE"
+    log_info "Environment variables exported: JSON_FILE"
+    echo "$output_file"
+    return 0
     
     # Return the JSON content
     # echo "$json_content"
