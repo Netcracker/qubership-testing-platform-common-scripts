@@ -4,9 +4,7 @@
 #   ${VAR_NAME} -> value of $VAR_NAME (must be set; unset vars keep placeholder, warn only).
 
 render_environment_configuration() {
-    local template_filename="${ENV_CONFIGURATION_TEMPLATE_FILENAME:-environment-configuration-template.json}"
-    local debug_mode="${DEBUG_MODE:-false}"
-    local template_path="${TMP_DIR}/environment-configuration/${template_filename}"
+    local template_path="${TMP_DIR}/environment-configuration/${ENV_CONFIGURATION_TEMPLATE_FILENAME:-environment-configuration-template.json}"
     local output_path="${TMP_DIR}/environment-configuration.json"
     local template_content rendered_content placeholders placeholder var_name var_value
     local missing_vars=()
@@ -64,7 +62,7 @@ render_environment_configuration() {
     fi
 
     # Debug mode output
-    case "${debug_mode,,}" in
+    case "${DEBUG_MODE:-false}" in
         1|true|yes|on)
             echo "🧪 DEBUG: Rendered environment configuration content:"
             printf '%s\n' "$rendered_content"
