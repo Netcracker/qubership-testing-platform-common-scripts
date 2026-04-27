@@ -69,19 +69,20 @@ clone_repository() {
         cd "$TMP_DIR" || return 1
 
         if [ -f .gitmodules ]; then
-            echo "🔧 Rewriting submodule URLs to use token authentication..."
+            echo "🔧 Configuring credential substitution for submodule authentication..."
 
-            git config --file=.gitmodules --get-regexp '^submodule\..*\.url$' | while read -r key url; do
-                if [[ "$url" =~ ^https://YOUR_GIT_HOST/ ]]; then
-                    auth_url=$(echo "$url" | sed "s|^https://|https://oauth2:${ATP_TESTS_GIT_TOKEN}@|")
-                    echo "   $key -> authenticated YOUR_GIT_HOST URL"
-                    git config --file=.gitmodules "$key" "$auth_url"
-                fi
-            done
+            GIT_HOST=$(echo "$ATP_TESTS_GIT_REPO_URL" | sed 's|^https://||; s|/.*||')
+            git config --global \
+                "url.https://oauth2:${ATP_TESTS_GIT_TOKEN}@${GIT_HOST}/.insteadOf" \
+                "https://${GIT_HOST}/"
         fi
 
-        git submodule sync --recursive
         git submodule update --init --recursive || return 1
+
+        if [ -f .gitmodules ] && [ -n "${GIT_HOST:-}" ]; then
+            git config --global --unset-all \
+                "url.https://oauth2:${ATP_TESTS_GIT_TOKEN}@${GIT_HOST}/.insteadOf" 2>/dev/null || true
+        fi
 
         echo "📋 Submodule status after initialization:"
         git submodule status || true
@@ -287,9 +288,6 @@ clone_repository() {
     fi
 
     if [ -f "$TMP_DIR/.gitmodules" ]; then
-        echo "📋 .gitmodules detected:"
-        cat "$TMP_DIR/.gitmodules"
-
         if command -v git >/dev/null 2>&1; then
             echo "📋 Submodule status:"
             git submodule status || true
