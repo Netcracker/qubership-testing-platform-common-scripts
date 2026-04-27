@@ -15,11 +15,11 @@ init_environment() {
     # Configure AWS S3 parameters (required) - using local variables for security
     if [[ -z "${ATP_STORAGE_USERNAME}" ]]; then
         echo "❌ ATP_STORAGE_USERNAME is required but not set"
-        exit 1
+        return 1
     fi
     if [[ -z "${ATP_STORAGE_PASSWORD}" ]]; then
         echo "❌ ATP_STORAGE_PASSWORD is required but not set"
-        exit 1
+        return 1
     fi
     
     # Store credentials in local variables (not exported to environment)
