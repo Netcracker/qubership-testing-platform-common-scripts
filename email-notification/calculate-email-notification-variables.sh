@@ -9,8 +9,6 @@
 # - jq (for JSON parsing)
 # - bc (for floating point calculations)
 
-set -eo pipefail
-
 # Logging functions
 log_info() {
     echo "ℹ️ $1"
@@ -37,13 +35,13 @@ ALLURE_RESULTS_DIR="${1:-/tmp/clone/allure-results}"
 # Check if allure-results directory exists
 if [ ! -d "$ALLURE_RESULTS_DIR" ]; then
     log_error "Allure results directory not found: $ALLURE_RESULTS_DIR"
-    exit 1
+    return 1
 fi
 
 # Check if jq is available
 if ! command -v jq &> /dev/null; then
     log_error "jq is required but not installed. Please install jq to parse JSON files."
-    exit 1
+    return 1
 fi
 
 # Check if bc is available, if not we'll use awk for calculations
@@ -105,7 +103,7 @@ done
 # Calculate pass rate
 if [ $total_tests -eq 0 ]; then
     log_error "No test results found in $ALLURE_RESULTS_DIR"
-    exit 1
+    return 1
 fi
 
 # Calculate pass rate as percentage (passed / total * 100)
@@ -138,8 +136,8 @@ export TEST_FAILED_COUNT="$failed_tests"
 export TEST_SKIPPED_COUNT="$skipped_tests"
 export TEST_OVERALL_STATUS="$overall_status"
 
-TEST_DETAILS_STRING=""
 # Create test details string
+TEST_DETAILS_STRING=""
 for test_detail in "${test_details[@]}"; do
     if [ -n "$TEST_DETAILS_STRING" ]; then
         TEST_DETAILS_STRING="$TEST_DETAILS_STRING\n$test_detail"
@@ -147,6 +145,7 @@ for test_detail in "${test_details[@]}"; do
         TEST_DETAILS_STRING="$test_detail"
     fi
 done
+export TEST_DETAILS_STRING="$TEST_DETAILS_STRING"
 
 # Display summary
 echo ""

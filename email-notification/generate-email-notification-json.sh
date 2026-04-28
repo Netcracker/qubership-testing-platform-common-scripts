@@ -10,8 +10,6 @@
 # Dependencies:
 # - calculate-email-notification-variables.sh (for test statistics)
 
-set -eo pipefail
-
 # Function to generate email notification JSON results
 generate_email_notification_json() {
     # Logging functions
@@ -46,6 +44,7 @@ generate_email_notification_json() {
     log_info "Generating JSON results file"
 
     # Calculate pass rate and test details
+    # shellcheck source=/home/runner/work/qubership-testing-platform-common-scripts/qubership-testing-platform-common-scripts/scripts/email-notification/calculate-email-notification-variables.sh
     source "$SCRIPT_DIR/calculate-email-notification-variables.sh" "$allure_results_dir"
 
     # Calculate additional metrics
@@ -60,7 +59,11 @@ generate_email_notification_json() {
     EXECUTION_DATE="${EXECUTION_DATE:-$(date '+%Y-%m-%d %H:%M:%S')}"
     TEST_COVERAGE="${TEST_COVERAGE:-100.00}"
     ATP_REPORT_VIEW_UI_URL="${ATP_REPORT_VIEW_UI_URL:-https://example.com}"
-    ALLURE_REPORT_URL="${ATP_REPORT_VIEW_UI_URL}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/index.html"
+    if [[ "${ATP_REPORT_VIEW_UI_URL}" == Test\ not\ started* ]]; then
+        ALLURE_REPORT_URL="${ATP_REPORT_VIEW_UI_URL}"
+    else
+        ALLURE_REPORT_URL="${ATP_REPORT_VIEW_UI_URL}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/index.html"
+    fi
     TIMESTAMP="${TIMESTAMP:-$(date '+%Y-%m-%d %H:%M:%S UTC')}"
 
     log_info "Building JSON structure..."
@@ -237,11 +240,10 @@ generate_email_notification_json() {
 
 
     # Export the JSON content as environment variable for use in other scripts
+    export GENERATED_JSON="$json_content"
     export JSON_FILE="$output_file"
 
-    log_info "Environment variables exported: JSON_FILE"
-    echo "$output_file"
-    return 0
+    log_info "Environment variables exported: GENERATED_JSON, JSON_FILE"
     
     # Return the JSON content
     # echo "$json_content"
