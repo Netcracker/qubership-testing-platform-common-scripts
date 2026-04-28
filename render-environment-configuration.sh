@@ -55,7 +55,6 @@ render_environment_configuration() {
 
     printf '%s' "$rendered_content" > "$output_path"
     export ATP_ENVGENE_CONFIGURATION="$rendered_content"
-    export ENV_SYSTEMS="$rendered_content"
 
     if [ "${#missing_vars[@]}" -gt 0 ]; then
         echo "⚠️ Rendering completed with missing variables: ${missing_vars[*]}"
@@ -70,5 +69,5 @@ render_environment_configuration() {
     esac
 
     echo "✅ Environment configuration rendered and saved to: $output_path"
-    echo "✅ Exported rendered configuration to ATP_ENVGENE_CONFIGURATION and ENV_SYSTEMS"
+    echo "✅ Exported rendered configuration to ATP_ENVGENE_CONFIGURATION"
 }
