@@ -49,8 +49,10 @@ finalize_once() {
       export TEST_SKIPPED_COUNT=0
       export TEST_COVERAGE=0
       export TEST_DETAILS_STRING=""
-      export EXECUTION_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
-      export TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S UTC')"
+      export EXECUTION_DATE
+      EXECUTION_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
+      export TIMESTAMP
+      TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S UTC')"
       export ALLURE_REPORT_URL="Test not started. Please check the logs for more details. $FAIL_MESSAGE. "
       export ATP_REPORT_VIEW_UI_URL="Test not started. Please check the logs for more details. $FAIL_MESSAGE. "
     fi

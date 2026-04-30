@@ -1,8 +1,8 @@
 # Qubership Testing Platform Common Scripts
 
-ATP3 submodule for ATP3-runners that contains base bash scripts.
+ATP3 submodule for ATP3-runners that contains base Bash scripts.
 
-# Modular Test Execution Scripts
+## Modular Test Execution Scripts
 
 This directory contains modular scripts for test execution in containerized environments.
 
@@ -175,4 +175,4 @@ ENTRYPOINT ["/entrypoint.sh"]
 1. Create runtime-specific setup script in `runtimes/`
 2. Create runtime-specific test runner if needed
 3. Update Dockerfile to copy appropriate modules
-4. Test with your specific runtime environment 
+4. Test with your specific runtime environment

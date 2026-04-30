@@ -65,7 +65,6 @@ run_collection_body() {
         echo "----- LAST 200 LINES: $collection_name -----"
         tail -n 200 "${raw_log_path}" || true
         echo "--------------------------------------------"
-        TOTAL_FAILED=1
       fi
 
       echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
@@ -73,7 +72,7 @@ run_collection_body() {
 
       if [ ${#RESOLVED_FOLDERS[@]} -eq 0 ]; then
         echo "⚠ No matching folders found — skipping collection"
-        popd > /dev/null
+        popd > /dev/null || return 1
         uuid=$(cat /proc/sys/kernel/random/uuid)
 
         cat > "$PATH_TO_ALLURE_RESULTS/${uuid}-result.json" <<EOF
@@ -114,7 +113,6 @@ EOF
         echo "----- LAST 200 LINES: $collection_name -----"
         tail -n 200 "${raw_log_path}" || true
         echo "--------------------------------------------"
-        TOTAL_FAILED=1
       fi
 
       echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
@@ -247,12 +245,12 @@ run_bruno_from_test_params() {
     case "$key" in
       *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME)
         export "$key"
+        # shellcheck disable=SC2163
         echo "  - $key"
         ;;
     esac
   done < <(compgen -e)
 
-  TOTAL_FAILED=0
   export -f run_collection_body
 
   export TMP_DIR

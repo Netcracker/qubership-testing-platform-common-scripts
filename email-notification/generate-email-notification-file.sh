@@ -34,7 +34,8 @@ generate_email_notification_file() {
     }
 
     # Get script directory
-    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local SCRIPT_DIR
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
     # Set default values if not provided
     if [ -z "$template_file" ]; then
@@ -45,7 +46,8 @@ generate_email_notification_file() {
     local allure_results_dir="/tmp/clone/allure-results"
     
     # Generate output file name based on template name
-    local template_basename=$(basename "$template_file" .txt)
+    local template_basename
+    template_basename=$(basename "$template_file" .txt)
     
     # Create email-notification-generated directory one level up
     local output_dir="/tmp/clone/scripts/email-notification-generated"
@@ -84,12 +86,14 @@ generate_email_notification_file() {
     TIMESTAMP="${TIMESTAMP:-$(date '+%Y-%m-%d %H:%M:%S UTC')}"
 
     # Read template content
-    local template_content=$(cat "$template_file")
+    local template_content
+    template_content=$(cat "$template_file")
 
     log_info "Replacing placeholders with actual values..."
 
     # Replace placeholders and handle conditional blocks using awk
-    local message_content=$(echo "$template_content" | awk -v overall_status="$TEST_OVERALL_STATUS" \
+    local message_content
+    message_content=$(cho "$template_content" | awk -v overall_status="$TEST_OVERALL_STATUS" \
         -v pass_rate="$TEST_PASS_RATE" \
         -v total_count="$TEST_TOTAL_COUNT" \
         -v passed_count="$TEST_PASSED_COUNT" \
