@@ -65,6 +65,7 @@ run_collection_body() {
         echo "----- LAST 200 LINES: $collection_name -----"
         tail -n 200 "${raw_log_path}" || true
         echo "--------------------------------------------"
+        touch "${TMP_DIR}/.collection_failed"
       fi
 
       echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
@@ -113,6 +114,7 @@ EOF
         echo "----- LAST 200 LINES: $collection_name -----"
         tail -n 200 "${raw_log_path}" || true
         echo "--------------------------------------------"
+        touch "${TMP_DIR}/.collection_failed"
       fi
 
       echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
@@ -244,8 +246,7 @@ run_bruno_from_test_params() {
   while IFS= read -r key; do
     case "$key" in
       *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME)
-        export "$key"
-        # shellcheck disable=SC2163
+        export "${key?}"
         echo "  - $key"
         ;;
     esac
@@ -326,5 +327,8 @@ export BRUNO_FOLDERS_STR
   sort "$TMP_DIR/tests_count.csv"
   echo "-----------------------------------------"
 
+  if [ -f "${TMP_DIR}/.collection_failed" ]; then
+    return 1
+  fi
   return 0
 }

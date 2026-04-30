@@ -35,6 +35,9 @@ run_tests() {
     echo "ℹ️ collections/ detected — running Bruno runner"
     run_bruno_from_test_params
     TEST_EXIT_CODE=$?
+    if [ $TEST_EXIT_CODE -ne 0 ]; then
+      fail "Bruno runner failed with code: $TEST_EXIT_CODE"
+    fi
   else
     echo "❌ Neither start_tests.sh nor collections/ directory found"
     exit 1
