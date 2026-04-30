@@ -26,12 +26,12 @@ check_env_var() {
     if [[ -z "${!var_name:-}" ]]; then
         if [[ -z "$compute_expr" ]]; then
             echo "❗Error: Variable $var_name must be specified!" >&2
-            exit 1
+            return 1
         else
             # Calculate the value
             if ! computed_value=$(eval "$compute_expr" 2>/dev/null); then
                 echo "❗Error calculating the value for $var_name" >&2
-                exit 1
+                return 1
             fi
 
             # Export variable

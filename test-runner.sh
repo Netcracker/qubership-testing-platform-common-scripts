@@ -3,16 +3,13 @@
 run_tests() {
   echo "▶ Starting test execution..."
 
-  set -o pipefail
-
   # shellcheck disable=SC1091
   if [ -f "/app/scripts/upload-monitor.sh" ]; then
     source "/app/scripts/upload-monitor.sh"
   elif [ -f "/scripts/upload-monitor.sh" ]; then
     source "/scripts/upload-monitor.sh"
   else
-    echo "❌ upload-monitor.sh not found!"
-    exit 1
+    fail "upload-monitor.sh not found"
   fi
 
   echo "📁 Creating Allure results directory..."
@@ -24,13 +21,23 @@ run_tests() {
   echo "🚀 Running test suite..."
 
   if [ -f "./start_tests.sh" ]; then
-    chmod +x "./start_tests.sh"
-    ./start_tests.sh
-    TEST_EXIT_CODE=$?
+    echo "🚀 Running test suite..."
+    chmod +x start_tests.sh
+    ./start_tests.sh || TEST_EXIT_CODE=$?
+
+    TEST_EXIT_CODE=${TEST_EXIT_CODE:-0}
+    if [ $TEST_EXIT_CODE -ne 0 ]; then
+        fail "Test suite failed with code: $TEST_EXIT_CODE"
+    else
+        echo "✅ Test suite completed successfully"
+    fi
   elif [ -d "./collections" ]; then
     echo "ℹ️ collections/ detected — running Bruno runner"
     run_bruno_from_test_params
     TEST_EXIT_CODE=$?
+    if [ $TEST_EXIT_CODE -ne 0 ]; then
+      fail "Bruno runner failed with code: $TEST_EXIT_CODE"
+    fi
   else
     echo "❌ Neither start_tests.sh nor collections/ directory found"
     exit 1
@@ -41,336 +48,4 @@ run_tests() {
   echo "✅ Test execution completed"
 
   return "$TEST_EXIT_CODE"
-}
-
-
-run_collection_body() {
-
-  collection_dir="$1"
-  collection_path="${TMP_DIR}/${collection_dir}"
-
-
-  if [ -n "$BRUNO_FOLDERS_STR" ]; then
-    mapfile -t BRUNO_FOLDERS_ARRAY <<< "$BRUNO_FOLDERS_STR"
-  else
-    BRUNO_FOLDERS_ARRAY=()
-  fi
-  
-  echo "➡️ Processing collection: $collection_path"
-
-  if [ -d "$collection_path" ]; then
-    collection_name=$(basename "$collection_dir")
-    bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
-    raw_log_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}.raw.log"
-
-    collection_start_ts=$(date +%s)
-    echo "🚀 START collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
-
-    pushd "$collection_path" > /dev/null || return 1
-    
-    RESOLVED_FOLDERS=()
-
-    if [ ${#BRUNO_FOLDERS_ARRAY[@]} -gt 0 ]; then
-
-      for folder in "${BRUNO_FOLDERS_ARRAY[@]}"; do
-        found_any=false
-
-        while IFS= read -r found; do
-          echo "✔ Found folder in $collection_name: $found"
-          RESOLVED_FOLDERS+=("$found")
-          found_any=true
-        done < <(find . -maxdepth 5 -type d -name "$folder" -not -path "*/.git/*" -not -path "*/node_modules/*")
-
-        if [ "$found_any" = false ]; then
-          echo "⚠ Folder not found in $collection_name: $folder"
-        fi
-      done
-
-    fi
-
-
-    if [ ${#BRUNO_FOLDERS_ARRAY[@]} -eq 0 ]; then
-
-      echo "➡ Running full collection"
-      echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=full time=$(date '+%H:%M:%S')"
-
-      COLLECTION_TIMEOUT="${COLLECTION_TIMEOUT:-3600}"
-
-      if timeout --signal=TERM --kill-after=30s "${COLLECTION_TIMEOUT}s" \
-        ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
-        --env "${BRUNO_ENV_STR}" \
-        ${BRUNO_ENV_VARS_CLI} \
-        --reporter-json "${bruno_report_path}" \
-        2>&1 | tee "${raw_log_path}"; then
-        echo "✅ SUCCESS: $collection_name"
-      else
-        rc=${PIPESTATUS[0]}
-        echo "❌ FAILED: $collection_name rc=$rc"
-        echo "----- LAST 200 LINES: $collection_name -----"
-        tail -n 200 "${raw_log_path}" || true
-        echo "--------------------------------------------"
-        TOTAL_FAILED=1
-      fi
-
-      echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
-    else
-
-      if [ ${#RESOLVED_FOLDERS[@]} -eq 0 ]; then
-        echo "⚠ No matching folders found — skipping collection"
-        popd > /dev/null
-        uuid=$(cat /proc/sys/kernel/random/uuid)
-
-        cat > "$PATH_TO_ALLURE_RESULTS/${uuid}-result.json" <<EOF
-        {
-          "uuid": "$uuid",
-          "name": "Collection: $collection_name",
-          "status": "skipped",
-          "stage": "finished",
-          "statusDetails": {
-            "message": "No matching folders found",
-            "trace": "Folders: ${BRUNO_FOLDERS_ARRAY[*]}"
-          },
-          "start": $(date +%s)000,
-          "stop": $(date +%s)000
-        }
-EOF
-        collection_end_ts=$(date +%s)
-        echo "🏁 BRUNO EXECUTION FINISHED =$collection_name pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
-        return
-      fi
-
-      echo "➡ Running folders: ${RESOLVED_FOLDERS[*]}"
-      echo "▶ BRUNO RUN START collection=$collection_name pid=$$ mode=folders time=$(date '+%H:%M:%S')"
-
-      COLLECTION_TIMEOUT="${COLLECTION_TIMEOUT:-3600}"
-      
-      if timeout --signal=TERM --kill-after=30s "${COLLECTION_TIMEOUT}s" \
-        ${BRU_BIN}/bru.js run ${BRUNO_FLAGS_CLI} \
-        --env "${BRUNO_ENV_STR}" \
-        ${BRUNO_ENV_VARS_CLI} \
-        --reporter-json "${bruno_report_path}" \
-        "${RESOLVED_FOLDERS[@]}" \
-        2>&1 | tee "${raw_log_path}"; then
-        echo "✅ SUCCESS: $collection_name"
-      else
-        rc=${PIPESTATUS[0]}
-        echo "❌ FAILED: $collection_name rc=$rc"
-        echo "----- LAST 200 LINES: $collection_name -----"
-        tail -n 200 "${raw_log_path}" || true
-        echo "--------------------------------------------"
-        TOTAL_FAILED=1
-      fi
-
-      echo "◀ BRUNO RUN END collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
-    fi
-
-    popd > /dev/null || return 1
-
-    collection_end_ts=$(date +%s)
-
-    echo "🏁 BRUNO EXECUTION FINISHED =$collection_name pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
-
-    if [ -f "$bruno_report_path" ]; then
-      echo "📦 Parsing report: $bruno_report_path"
-
-      count=$(jq 'if type=="array" then (if (.[0]?|type)=="object" and (.[0]?|has("results")) then ([.[].results[]]|length) else length end) elif type=="object" and has("results") then (.results|length) else 0 end' "$bruno_report_path")
-      echo "📊 $collection_name → $count tests"
-      printf "%s,%s\n" "$collection_name" "$count" >> "$TMP_DIR/tests_count.csv"
-      node /scripts/tools/bruno-to-allure.js  \
-        "$bruno_report_path" \
-        "$PATH_TO_ALLURE_RESULTS" \
-        "$collection_name"
-      echo "✅ COLLECTION FULLY FINISHED collection=$collection_name pid=$$ time=$(date '+%H:%M:%S')"
-    else
-
-      echo "⚠ Bruno report missing — writing broken test to Allure"
-
-      uuid=$(cat /proc/sys/kernel/random/uuid)
-
-      cat > "$PATH_TO_ALLURE_RESULTS/${uuid}-result.json" <<EOF
-      {
-        "uuid": "$uuid",
-        "name": "Collection: $collection_name",
-        "status": "broken",
-        "stage": "finished",
-        "labels": [
-          { "name": "parentSuite", "value": "Bruno" },
-          { "name": "suite", "value": "$collection_name" }
-        ],
-        "statusDetails": {
-          "message": "Bruno report file not generated",
-          "trace": "See raw log: $raw_log_path"
-        },
-        "start": $(date +%s)000,
-        "stop": $(date +%s)000
-      }
-EOF
-      
-    fi
-
-  else
-    echo "⚠️ Collection not found: $collection_path — skipping"
-
-    uuid=$(cat /proc/sys/kernel/random/uuid)
-    skipped_file="$PATH_TO_ALLURE_RESULTS/${uuid}-result.json"
-
-    cat > "$skipped_file" <<EOF
-    {
-      "uuid": "$uuid",
-      "name": "Collection: $(basename "$collection_dir")",
-      "status": "skipped",
-      "stage": "finished",
-      "labels": [
-        { "name": "parentSuite", "value": "Bruno" },
-        { "name": "suite", "value": "$(basename "$collection_dir")" }
-      ],
-      "statusDetails": {
-        "message": "Collection directory not found: $collection_path",
-        "trace": ""
-      },
-      "start": $(date +%s)000,
-      "stop": $(date +%s)000
-    }
-EOF
-
-  fi
-
-}
-
-run_bruno_from_test_params() {
-  echo "🚀 Bruno execution with EnvGene "
-
-  # shellcheck disable=SC1091
-  source /scripts/tools/bru_tools.sh
-
-  check_env_var "TEST_PARAMS" ""
-
-  extract_bruno_env "$TEST_PARAMS" "BRUNO_ENV_STR"
-  extract_bruno_collections "$TEST_PARAMS" "BRUNO_COLLECTIONS_ARRAY"
-  if [ ${#BRUNO_COLLECTIONS_ARRAY[@]} -eq 0 ]; then
-    echo "⚠ No collections provided — discovering all Bruno collections automatically"
-
-    mapfile -t BRUNO_COLLECTIONS_ARRAY < <(
-      find collections -mindepth 2 -maxdepth 2 -type f -name "collection.bru" \
-        ! -path "*/.git/*" \
-        ! -path "*/node_modules/*" \
-        -printf '%h\n' | sort -u
-    )
-
-    echo "📦 Discovered Bruno collections:"
-    printf "  - %s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
-  fi
-  extract_bruno_env_vars "$TEST_PARAMS" "BRUNO_ENV_VARS_CLI"
-  extract_bruno_flags "$TEST_PARAMS" "BRUNO_FLAGS_CLI"
-  extract_bruno_folders "$TEST_PARAMS" "BRUNO_FOLDERS_ARRAY"
-
-  cd "$TMP_DIR" || return 1
-
-
-  PATH_TO_ATTACHMENTS_DIR="${TMP_DIR}/attachments"
-  PATH_TO_ALLURE_RESULTS="${TMP_DIR}/allure-results"
-  rm -rf "$PATH_TO_ATTACHMENTS_DIR" "$PATH_TO_ALLURE_RESULTS"
-  mkdir -p "$PATH_TO_ATTACHMENTS_DIR"
-  mkdir -p "$PATH_TO_ALLURE_RESULTS"
-  : > "$TMP_DIR/tests_count.csv"
-
-  {
-    echo "BRUNO_ENV=$BRUNO_ENV_STR"
-
-    while IFS= read -r key; do
-      case "$key" in
-        *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME)
-          printf '%s=%s\n' "$key" "${!key}"
-          ;;
-      esac
-    done < <(compgen -e | sort)
-  } > "$PATH_TO_ALLURE_RESULTS/environment.properties"
-
-  echo "Env vars exported to Bruno child processes:"
-  while IFS= read -r key; do
-    case "$key" in
-      *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME)
-        export "$key"
-        echo "  - $key"
-        ;;
-    esac
-  done < <(compgen -e)
-
-  TOTAL_FAILED=0
-  export -f run_collection_body
-
-  export TMP_DIR
-  export PATH_TO_ATTACHMENTS_DIR
-  export PATH_TO_ALLURE_RESULTS
-  export BRU_BIN
-  export BRUNO_ENV_STR
-  export BRUNO_ENV_VARS_CLI
-  export BRUNO_FLAGS_CLI
-
-  if [ ${#BRUNO_FOLDERS_ARRAY[@]} -gt 0 ]; then
-    BRUNO_FOLDERS_STR=$(printf "%s\n" "${BRUNO_FOLDERS_ARRAY[@]}")
-  else
-    BRUNO_FOLDERS_STR=""
-  fi
-
-export BRUNO_FOLDERS_STR
-
-  PARALLELISM=${PARALLELISM:-4}
-  echo "Collections to run:"
-  printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
-  echo "Total collections: ${#BRUNO_COLLECTIONS_ARRAY[@]}"
-
-  echo "⚡ Running ${#BRUNO_COLLECTIONS_ARRAY[@]} collections with parallelism=$PARALLELISM"
-
-  printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}" > "$PATH_TO_ALLURE_RESULTS/collections.txt"
-
-  parallel_start_ts=$(date +%s)
-  echo "✅ PARALLEL PHASE START time=$(date '+%H:%M:%S')"
-
-  running_jobs=0
-  active_collection_pids=()
-
-  wait_for_collection_slot() {
-    while true; do
-      for idx in "${!active_collection_pids[@]}"; do
-        local pid="${active_collection_pids[$idx]}"
-
-        if ! kill -0 "$pid" 2>/dev/null; then
-          wait "$pid" || true
-          unset 'active_collection_pids[idx]'
-          active_collection_pids=("${active_collection_pids[@]}")
-          return 0
-        fi
-      done
-
-      sleep 1
-    done
-  }
-
-  for collection in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
-    bash -c 'run_collection_body "$1"' _ "$collection" &
-    active_collection_pids+=("$!")
-    running_jobs=$((running_jobs + 1))
-
-    if [ "$running_jobs" -ge "$PARALLELISM" ]; then
-      wait_for_collection_slot
-      running_jobs=$((running_jobs - 1))
-    fi
-  done
-
-  while [ "$running_jobs" -gt 0 ]; do
-    wait_for_collection_slot
-    running_jobs=$((running_jobs - 1))
-  done
-
-  parallel_end_ts=$(date +%s)
-
-  echo "✅ PARALLEL PHASE END time=$(date '+%H:%M:%S') took=$((parallel_end_ts-parallel_start_ts))s"
-
-  
-  echo "==== TEST COUNT BY COLLECTION ===="
-  sort "$TMP_DIR/tests_count.csv"
-  echo "-----------------------------------------"
-
-  return 0
 }

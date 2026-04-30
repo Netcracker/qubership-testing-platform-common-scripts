@@ -1,8 +1,8 @@
 # Qubership Testing Platform Common Scripts
 
-ATP3 submodule for ATP3-runners that contains base bash scripts.
+ATP3 submodule for ATP3-runners that contains base Bash scripts.
 
-# Modular Test Execution Scripts
+## Modular Test Execution Scripts
 
 This directory contains modular scripts for test execution in containerized environments.
 
@@ -14,6 +14,7 @@ The test execution process is divided into modular components that can be easily
 
 - **`init.sh`** - Environment initialization and secure AWS/S3 configuration
 - **`git-clone.sh`** - Repository cloning and extraction (clears Git token)
+- **`render-environment-configuration.sh`** - Renders `/environment-configuration/environment-configuration-template.json` in the clone: substitutes `${VAR_NAME}` from the pod env, writes `/tmp/clone/environment-configuration.json`, exports `ATP_ENVGENE_CONFIGURATION` and `ENV_SYSTEMS`. Unset placeholders stay in the file (warning only). Call after `clone_repository`.
 - **`runtime-setup.sh`** - Runtime-specific environment setup
 - **`test-runner.sh`** - Test execution and results collection (clears sensitive vars)
 - **`upload-monitor.sh`** - Event-based upload monitoring and finalization
@@ -174,4 +175,4 @@ ENTRYPOINT ["/entrypoint.sh"]
 1. Create runtime-specific setup script in `runtimes/`
 2. Create runtime-specific test runner if needed
 3. Update Dockerfile to copy appropriate modules
-4. Test with your specific runtime environment 
+4. Test with your specific runtime environment
