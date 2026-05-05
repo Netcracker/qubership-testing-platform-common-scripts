@@ -53,8 +53,12 @@ finalize_once() {
       EXECUTION_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
       export TIMESTAMP
       TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S UTC')"
-      export ALLURE_REPORT_URL="Test not started. Please check the logs for more details. $FAIL_MESSAGE. "
-      export ATP_REPORT_VIEW_UI_URL="Test not started. Please check the logs for more details. $FAIL_MESSAGE. "
+      if compgen -G "$TMP_DIR/allure-results/*-result.json" > /dev/null 2>&1; then
+        echo "ℹ️  Allure results detected — skipping 'Test not started' URL override."
+      else
+        export ALLURE_REPORT_URL="Test not started. Please check the logs for more details. $FAIL_MESSAGE. "
+        export ATP_REPORT_VIEW_UI_URL="Test not started. Please check the logs for more details. $FAIL_MESSAGE. "
+      fi
     fi
 
     generate_email_notification_json || true
