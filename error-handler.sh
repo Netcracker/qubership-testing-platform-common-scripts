@@ -62,6 +62,7 @@ finalize_once() {
     fi
 
     generate_email_notification_json || true
+    push_metrics || true
     save_native_report "$TMP_DIR/${NATIVE_REPORT_DIR:-playwright-report}" || true
     finalize_upload || true
     sleep 15
