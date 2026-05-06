@@ -17,7 +17,7 @@
 
 if ! declare -f _metrics_build_url > /dev/null 2>&1; then
     echo "❌ push-metrics-start.sh: push-metrics.sh must be sourced before this file." >&2
-    return 1 2>/dev/null || exit 1
+    return 1 2>/dev/null
 fi
 
 push_metrics_start() {
@@ -66,5 +66,6 @@ push_metrics_start() {
     # -------------------------------------------------------------------------
     # Push to configured endpoint(s)
     # -------------------------------------------------------------------------
+    # shellcheck disable=SC2128
     _metrics_dispatch "$FUNCNAME" "$payload" "$env" "$run_date" "$run_time"
 }

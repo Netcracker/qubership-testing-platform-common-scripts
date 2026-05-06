@@ -323,5 +323,6 @@ push_metrics() {
     # -------------------------------------------------------------------------
     # Push to configured endpoint(s)
     # -------------------------------------------------------------------------
+    # shellcheck disable=SC2128
     _metrics_dispatch "$FUNCNAME" "$payload" "$env"
 }
