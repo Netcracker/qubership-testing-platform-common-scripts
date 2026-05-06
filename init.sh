@@ -14,11 +14,11 @@ init_environment() {
 
     # Configure AWS S3 parameters (required) - using local variables for security
     if [[ -z "${ATP_STORAGE_USERNAME}" ]]; then
-        echo "❌ ATP_STORAGE_USERNAME is required but not set"
+        log "❌ ATP_STORAGE_USERNAME is required but not set"
         return 1
     fi
     if [[ -z "${ATP_STORAGE_PASSWORD}" ]]; then
-        echo "❌ ATP_STORAGE_PASSWORD is required but not set"
+        log "❌ ATP_STORAGE_PASSWORD is required but not set"
         return 1
     fi
     
@@ -39,5 +39,5 @@ init_environment() {
     export TMP_DIR="/tmp/clone"
     mkdir -p "$TMP_DIR"
 
-    echo "✅ Environment initialized successfully"
+    log "✅ Environment initialized successfully"
 }

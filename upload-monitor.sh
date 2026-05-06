@@ -168,7 +168,7 @@ generate_result_urls() {
 
 # Clear sensitive environment variables
 clear_sensitive_vars() {
-    echo "🔐 Clearing sensitive environment variables..."
+    log "🔐 Clearing sensitive environment variables..."
     unset AWS_ACCESS_KEY_ID
     unset AWS_SECRET_ACCESS_KEY
     unset ATP_STORAGE_USERNAME
@@ -177,18 +177,18 @@ clear_sensitive_vars() {
 
 # Restore AWS credentials for final operations
 restore_aws_credentials() {
-    echo "🔑 Restoring AWS credentials for final operations..."
+    log "🔑 Restoring AWS credentials for final operations..."
     export AWS_ACCESS_KEY_ID="$_LOCAL_S3_KEY"
     export AWS_SECRET_ACCESS_KEY="$_LOCAL_S3_SECRET"
 }
 
 # Final cleanup of all credentials
 final_cleanup() {
-    echo "🧹 Final cleanup of all credentials..."
+    log "🧹 Final cleanup of all credentials..."
     unset AWS_ACCESS_KEY_ID
     unset AWS_SECRET_ACCESS_KEY
     unset _LOCAL_S3_KEY
     unset _LOCAL_S3_SECRET
     unset _BACKGROUND_S3_KEY
     unset _BACKGROUND_S3_SECRET
-} 
+}

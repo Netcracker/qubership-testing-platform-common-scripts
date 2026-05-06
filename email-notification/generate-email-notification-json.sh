@@ -14,19 +14,35 @@
 generate_email_notification_json() {
     # Logging functions
     log_info() {
-        echo "ℹ️ $1"
+        if command -v log > /dev/null 2>&1; then
+            log "ℹ️ $1"
+        else
+            echo "ℹ️ $1"
+        fi
     }
 
     log_success() {
-        echo "✅ $1"
+        if command -v log > /dev/null 2>&1; then
+            log "✅ $1"
+        else
+            echo "✅ $1"
+        fi
     }
     # shellcheck disable=SC2329
     log_warning() {
-        echo "⚠️ $1"
+        if command -v log > /dev/null 2>&1; then
+            log "⚠️ $1"
+        else
+            echo "⚠️ $1"
+        fi
     }
     # shellcheck disable=SC2329
     log_error() {
-        echo "❌ $1"
+        if command -v log > /dev/null 2>&1; then
+            log "❌ $1"
+        else
+            echo "❌ $1"
+        fi
     }
     # Get script directory
     local SCRIPT_DIR

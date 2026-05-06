@@ -11,19 +11,35 @@
 
 # Logging functions
 log_info() {
-    echo "ℹ️ $1"
+    if command -v log > /dev/null 2>&1; then
+        log "ℹ️ $1"
+    else
+        echo "ℹ️ $1"
+    fi
 }
 
 log_success() {
-    echo "✅ $1"
+    if command -v log > /dev/null 2>&1; then
+        log "✅ $1"
+    else
+        echo "✅ $1"
+    fi
 }
 # shellcheck disable=SC2329
 log_warning() {
-    echo "⚠️ $1"
+    if command -v log > /dev/null 2>&1; then
+        log "⚠️ $1"
+    else
+        echo "⚠️ $1"
+    fi
 }
 # shellcheck disable=SC2329
 log_error() {
-    echo "❌ $1"
+    if command -v log > /dev/null 2>&1; then
+        log "❌ $1"
+    else
+        echo "❌ $1"
+    fi
 }
 # shellcheck disable=SC2034
 # Get script directory
@@ -150,23 +166,23 @@ export TEST_DETAILS_STRING="$TEST_DETAILS_STRING"
 # Display summary
 echo ""
 log_info "=== Test Results Summary ==="
-echo "Overall Status: $overall_status"
-echo "Pass Rate: ${pass_rate}%"
-echo "Total Tests: $total_tests"
-echo "Passed: $passed_tests"
-echo "Failed: $failed_tests"
-echo "Skipped: $skipped_tests"
+log_info "Overall Status: $overall_status"
+log_info "Pass Rate: ${pass_rate}%"
+log_info "Total Tests: $total_tests"
+log_info "Passed: $passed_tests"
+log_info "Failed: $failed_tests"
+log_info "Skipped: $skipped_tests"
 echo ""
 
 # Export variables for use in other scripts
 log_info "Environment variables exported:"
-echo "TEST_PASS_RATE=$pass_rate"
-echo "TEST_PASS_RATE_ROUNDED=$pass_rate_rounded"
-echo "TEST_TOTAL_COUNT=$total_tests"
-echo "TEST_PASSED_COUNT=$passed_tests"
-echo "TEST_FAILED_COUNT=$failed_tests"
-echo "TEST_SKIPPED_COUNT=$skipped_tests"
-echo "TEST_OVERALL_STATUS=$overall_status"
-echo "TEST_DETAILS_STRING=<multiline string with test details>"
+log_info "TEST_PASS_RATE=$pass_rate"
+log_info "TEST_PASS_RATE_ROUNDED=$pass_rate_rounded"
+log_info "TEST_TOTAL_COUNT=$total_tests"
+log_info "TEST_PASSED_COUNT=$passed_tests"
+log_info "TEST_FAILED_COUNT=$failed_tests"
+log_info "TEST_SKIPPED_COUNT=$skipped_tests"
+log_info "TEST_OVERALL_STATUS=$overall_status"
+log_info "TEST_DETAILS_STRING=<multiline string with test details>"
 
 log_success "Pass rate calculation completed successfully"
