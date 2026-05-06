@@ -3,7 +3,7 @@
 # Push test result metrics to Prometheus Pushgateway / VictoriaMetrics
 #
 # Reads from:
-#   - $GENERATED_JSON (env var set by generate_email_notification_json)
+#   - $JSON_FILE (path set by generate_email_notification_json)
 #   - /tmp/clone/allure-results/*-result.json (individual Allure result files)
 #
 # Feature toggle:
@@ -167,8 +167,8 @@ push_metrics() {
         return 1
     fi
 
-    if [[ -z "${GENERATED_JSON:-}" ]]; then
-        echo "❌ push_metrics: GENERATED_JSON is not set. Run generate_email_notification_json first."
+    if [[ -z "${JSON_FILE:-}" ]] || [[ ! -f "${JSON_FILE}" ]]; then
+        echo "❌ push_metrics: JSON_FILE is not set or missing. Run generate_email_notification_json first."
         return 1
     fi
 
@@ -176,17 +176,17 @@ push_metrics() {
     local env="${ENVIRONMENT_NAME:-unknown}"
 
     # -------------------------------------------------------------------------
-    # Parse scope-level statistics from GENERATED_JSON
+    # Parse scope-level statistics from JSON_FILE
     # -------------------------------------------------------------------------
     local pass_rate total passed failed skipped overall_status
-    pass_rate=$(echo "$GENERATED_JSON"    | jq -r '.test_results.pass_rate        // 0')
-    total=$(echo "$GENERATED_JSON"        | jq -r '.test_results.total_count      // 0')
-    passed=$(echo "$GENERATED_JSON"       | jq -r '.test_results.passed_count     // 0')
-    failed=$(echo "$GENERATED_JSON"       | jq -r '.test_results.failed_count     // 0')
-    skipped=$(echo "$GENERATED_JSON"      | jq -r '.test_results.skipped_count    // 0')
-    overall_status=$(echo "$GENERATED_JSON" | jq -r '.test_results.overall_status // "UNKNOWN"')
+    pass_rate=$(jq -r '.test_results.pass_rate        // 0' "$JSON_FILE")
+    total=$(jq -r '.test_results.total_count      // 0' "$JSON_FILE")
+    passed=$(jq -r '.test_results.passed_count     // 0' "$JSON_FILE")
+    failed=$(jq -r '.test_results.failed_count     // 0' "$JSON_FILE")
+    skipped=$(jq -r '.test_results.skipped_count    // 0' "$JSON_FILE")
+    overall_status=$(jq -r '.test_results.overall_status // "UNKNOWN"' "$JSON_FILE")
 
-    echo "GENERATED_JSON content parsing results:" 
+    echo "JSON content parsing results:" 
     echo "pass_rate: $pass_rate"
     echo "total: $total"
     echo "passed: $passed"
@@ -304,13 +304,13 @@ push_metrics() {
             payload+="atp_test_case_duration_seconds{test_name=\"${safe_name}\",environment=\"${env}\",suite=\"${safe_suite}\"} ${duration}\n"
         done
     else
-        echo "⚠️ push_metrics: allure-results not found or empty, falling back to GENERATED_JSON test_details"
+        echo "⚠️ push_metrics: allure-results not found or empty, falling back to JSON_FILE test_details"
         local count
-        count=$(echo "$GENERATED_JSON" | jq '.test_details | length')
+        count=$(jq '.test_details | length' "$JSON_FILE")
         for ((i=0; i<count; i++)); do
             local test_name status result_val safe_name
-            test_name=$(echo "$GENERATED_JSON" | jq -r ".test_details[$i].test_name")
-            status=$(echo "$GENERATED_JSON"    | jq -r ".test_details[$i].status" | tr '[:upper:]' '[:lower:]')
+            test_name=$(jq -r ".test_details[$i].test_name" "$JSON_FILE")
+            status=$(jq -r ".test_details[$i].status" "$JSON_FILE" | tr '[:upper:]' '[:lower:]')
             result_val=0
             [[ "$status" == "passed" ]] && result_val=1
             safe_name="${test_name//\"/\\\"}"

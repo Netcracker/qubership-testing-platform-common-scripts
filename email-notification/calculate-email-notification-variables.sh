@@ -145,7 +145,6 @@ for test_detail in "${test_details[@]}"; do
         TEST_DETAILS_STRING="$test_detail"
     fi
 done
-export TEST_DETAILS_STRING="$TEST_DETAILS_STRING"
 
 # Display summary
 echo ""

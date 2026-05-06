@@ -239,11 +239,9 @@ generate_email_notification_json() {
     log_success "JSON generated successfully: $output_file"
 
 
-    # Export the JSON content as environment variable for use in other scripts
-    export GENERATED_JSON="$json_content"
     export JSON_FILE="$output_file"
 
-    log_info "Environment variables exported: GENERATED_JSON, JSON_FILE"
+    log_info "Environment variables exported: JSON_FILE"
     
     # Return the JSON content
     # echo "$json_content"
