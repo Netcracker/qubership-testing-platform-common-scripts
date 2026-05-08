@@ -41,8 +41,9 @@ This set of scripts is designed to analyze test results from the `allure-results
 
 After executing `generate-email-notification-json.sh`, the following environment variables are available:
 
-- `GENERATED_JSON` - Content of the generated JSON file
-- `JSON_FILE` - Path to the JSON results file
+- `JSON_FILE` - Path to the JSON results file (read content with `jq`/`cat`; not exported as env to avoid ARG_MAX limits)
+
+Full JSON content is **not** exported as an environment variable; use `$JSON_FILE`.
 
 ## Environment Variables
 
@@ -62,7 +63,7 @@ The script uses the following environment variables for JSON generation:
 - `REPORT_VIEW_HOST_URL` - Host for viewing reports
 - `ALLURE_REPORT_URL` - Path to reports folder
 - `TIMESTAMP` - Timestamp
-- `TEST_DETAILS_STRING` - String with details of all tests (converted to JSON array)
+- `TEST_DETAILS_STRING` - String with details of all tests (used during generation only; not exported — large runs would exceed ARG_MAX)
 
 ## Generated JSON Structure
 
@@ -117,9 +118,9 @@ json_content=$(generate_email_notification_json)
 # Use the result
 echo "$json_content"
 
-# Or use exported variables
+# Or use exported path and read file
 echo "JSON file: $JSON_FILE"
-echo "Content: $GENERATED_JSON"
+jq . "$JSON_FILE"
 
 # File will be saved to: ../email-notification-generated/email-notification-results-generated.json
 ```
@@ -134,10 +135,8 @@ The `generate_email_notification_json` function does not accept parameters.
 
 ### Return Values
 
-The function returns:
-- **Generated JSON content** (output to stdout)
-- **Environment variable `GENERATED_JSON`** - JSON content
-- **Environment variable `JSON_FILE`** - path to JSON file
+The function writes JSON to disk and exports:
+- **Environment variable `JSON_FILE`** - path to JSON file (consumers read file; JSON is not stored in env)
 
 ## Differences from Text Version
 
