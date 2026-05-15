@@ -37,6 +37,19 @@ extract_bruno_collections() {
     echo -e "$output_message"
 }
 
+extract_test_type() {
+    local input="$1"
+    local output_var_name="$2"
+    local result=""
+
+    result=$(echo "$input" | jq -r '.execution_list[]?.type')
+    if [[ -n "$result" ]]; then
+        eval "$output_var_name=\"$result\""
+    fi
+
+    local output_message="➡️ Extracted test type:"
+    echo -e "$output_message $result"
+}
 
 
 # Extract Bruno folders from string separated by '|' and convert them to an array
@@ -69,56 +82,4 @@ extract_bruno_folders() {
         output_message+="\n    - $folder"
     done
     echo -e "$output_message"
-}
-
-# Return:
-#   0 — if LOCAL_RUN=true
-#   1 — if LOCAL_RUN=false or value not set/empty
-#   2 — if incorrect value (not true, not false)
-local_run_enabled() {
-
-  local val="${LOCAL_RUN:-}"
-
-  if [ -z "$val" ]; then
-    return 1
-  fi
-
-  # reduce it to lowercase
-  val="$(printf '%s' "$val" | tr '[:upper:]' '[:lower:]')"
-
-  case "$val" in
-    true)  return 0 ;;
-    false) return 1 ;;
-    *)
-      printf '❌ Incorrect value LOCAL_RUN=%s (expected true/false)\n' "$LOCAL_RUN" >&2
-      return 2
-      ;;
-  esac
-}
-
-# Local test execution module
-local_run_tests() {
-    cd "$TMP_DIR" || return 1
-
-     # Create Allure results directory
-    echo "▶ Starting test execution..."
-    export NODE_PATH=/app/node_modules
-
-    cp -r "$WORK_DIR/tools" "$TMP_DIR/tools"
-
-     # Create Allure results directory
-    echo "📁 Creating Allure results directory..."
-    mkdir -p "$TMP_DIR/allure-results"
-
-    # Execute test suite
-    echo "🚀 Running test suite..."
-    chmod +x start_tests.sh
-    ./start_tests.sh || TEST_EXIT_CODE=$?
-
-    TEST_EXIT_CODE=${TEST_EXIT_CODE:-0}
-    echo "ℹ️ Test script exited with code: $TEST_EXIT_CODE (but continuing...)"
-    
-    echo "✅ Test execution completed"
-
-    cd "$WORK_DIR" || return 1
 }

@@ -65,11 +65,18 @@ run_bru() {
   local log_path="$2"
   shift 2
 
+  if [ -n "${BRUNO_ENV_STR}" ]; then
+    local env_flag="--env ${BRUNO_ENV_STR:-envoriment-template.bru}"
+  else
+    local env_flag=""
+  fi
+
   # shellcheck disable=SC2086
-  timeout --signal=TERM --kill-after=30s "${COLLECTION_TIMEOUT:-3600}s" \
+  timeout -s TERM -k 30 \
+    "${COLLECTION_TIMEOUT:-3600}s" \
     "${BRU_BIN}/bru.js" run \
     ${BRUNO_FLAGS_CLI:-"--insecure"} \
-    --env "${BRUNO_ENV_STR:-envoriment-template.bru}" \
+    ${env_flag} \
     --reporter-json "${report_path}" \
     "$@" \
     2>&1 | tee "${log_path}"
@@ -191,7 +198,7 @@ run_collection_body() {
 
   local collection_start_ts
   collection_start_ts=$(date +%s)
-  echo "START collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
+  echo "🚀 START collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
 
   pushd "$collection_path" > /dev/null || return 1
 
@@ -203,25 +210,25 @@ run_collection_body() {
 
   if [ "${#BRUNO_FOLDERS_ARRAY[@]}" -eq 0 ]; then
     # Full-collection mode
-    echo "Running full collection"
-    echo "BRUNO RUN START collection=${collection_name} pid=$$ mode=full time=$(date '+%H:%M:%S')"
+    echo "🔍 Running full collection"
+    echo "🚀 BRUNO RUN START collection=${collection_name} pid=$$ mode=full time=$(date '+%H:%M:%S')"
 
     if ! run_bru "$bruno_report_path" "$raw_log_path"; then
-      echo "FAILED: ${collection_name} rc=$?"
+      echo "❌ FAILED: ${collection_name} rc=$?"
       echo "----- LAST 200 LINES: ${collection_name} -----"
       tail -n 200 "${raw_log_path}" || true
       echo "--------------------------------------------"
       touch "${TMP_DIR}/.collection_failed"
       run_ok=false
     else
-      echo "SUCCESS: ${collection_name}"
+      echo "✅ SUCCESS: ${collection_name}"
     fi
 
-    echo "BRUNO RUN END collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
+    echo "🏁 BRUNO RUN END collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
 
   elif [ "${#RESOLVED_FOLDERS[@]}" -eq 0 ]; then
     # Folder-filter requested but nothing matched — skip with a placeholder
-    echo "No matching folders found — skipping collection"
+    echo "❌ No matching folders found — skipping collection"
     popd > /dev/null || return 1
     write_allure_placeholder \
       "skipped" \
@@ -230,37 +237,37 @@ run_collection_body() {
       "Folders: ${BRUNO_FOLDERS_ARRAY[*]}"
     local collection_end_ts
     collection_end_ts=$(date +%s)
-    echo "FINISHED collection=${collection_name} pid=$$ duration=$((collection_end_ts-collection_start_ts))s"
+    echo "🏁 FINISHED collection=${collection_name} pid=$$ duration=$((collection_end_ts-collection_start_ts))s"
     return 0
 
   else
     # Folder-filter mode
-    echo "Running folders: ${RESOLVED_FOLDERS[*]}"
+    echo "🔍 Running folders: ${RESOLVED_FOLDERS[*]}"
     echo "BRUNO RUN START collection=${collection_name} pid=$$ mode=folders time=$(date '+%H:%M:%S')"
 
     if ! run_bru "$bruno_report_path" "$raw_log_path" "${RESOLVED_FOLDERS[@]}"; then
-      echo "FAILED: ${collection_name} rc=$?"
+      echo "❌ FAILED: ${collection_name} rc=$?"
       echo "----- LAST 200 LINES: ${collection_name} -----"
       tail -n 200 "${raw_log_path}" || true
       echo "--------------------------------------------"
       touch "${TMP_DIR}/.collection_failed"
       run_ok=false
     else
-      echo "SUCCESS: ${collection_name}"
+      echo "✅ SUCCESS: ${collection_name}"
     fi
 
-    echo "BRUNO RUN END collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
+    echo "🏁 BRUNO RUN END collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
   fi
 
   popd > /dev/null || return 1
 
   local collection_end_ts
   collection_end_ts=$(date +%s)
-  echo "FINISHED collection=${collection_name} pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
+  echo "🏁 FINISHED collection=${collection_name} pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
 
   # Convert report or write a broken placeholder
   if [ -f "$bruno_report_path" ]; then
-    echo "Parsing report: ${bruno_report_path}"
+    echo "🔍 Parsing report: ${bruno_report_path}"
     local count
     count=$(jq 'if type=="array"
                 then (if (.[0]?|type)=="object" and (.[0]?|has("results"))
@@ -268,15 +275,15 @@ run_collection_body() {
                       else length end)
                 elif type=="object" and has("results") then (.results|length)
                 else 0 end' "$bruno_report_path")
-    echo "${collection_name} -> ${count} tests"
+    echo "✅ ${collection_name} -> ${count} tests"
     printf "%s,%s\n" "${collection_name}" "${count}" >> "${TMP_DIR}/tests_count.csv"
     node /scripts/tools/bruno-to-allure.js \
       "$bruno_report_path" \
       "$PATH_TO_ALLURE_RESULTS" \
       "$collection_name"
-    echo "COLLECTION FULLY FINISHED collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
+    echo "🏁 COLLECTION FULLY FINISHED collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
   else
-    echo "Bruno report missing — writing broken result to Allure"
+    echo "❌ Bruno report missing — writing broken result to Allure"
     write_allure_placeholder \
       "broken" \
       "Collection: ${collection_name}" \
