@@ -5,19 +5,11 @@
 #   scripts/tools/bru_tools.sh   (sourced by the caller, entrypoint.sh)
 #   scripts/lib/collection-runner.sh  (sourced here)
 
-# shellcheck source=/dev/null
 source /scripts/lib/collection-runner.sh
 
 run_bruno_from_test_params() {
   echo "🚀 Bruno execution started"
 
-  # shellcheck disable=SC1091
-  source /scripts/tools/bru_tools.sh
-
-  # TODO  get rid of
-  check_env_var "TEST_PARAMS" ""
-
-  extract_bruno_env       "$TEST_PARAMS" "BRUNO_ENV_STR"
   extract_bruno_collections "$TEST_PARAMS" "BRUNO_COLLECTIONS_ARRAY"
 
   if [ "${#BRUNO_COLLECTIONS_ARRAY[@]}" -eq 0 ]; then
@@ -33,9 +25,9 @@ run_bruno_from_test_params() {
     printf "  - %s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
   fi
 
-  extract_bruno_env_vars "$TEST_PARAMS" "BRUNO_ENV_VARS_CLI"
-  extract_bruno_flags    "$TEST_PARAMS" "BRUNO_FLAGS_CLI"
-  extract_bruno_folders  "$TEST_PARAMS" "BRUNO_FOLDERS_ARRAY"
+  BRUNO_ENV_STR="$BRUNO_ENV"
+  BRUNO_FLAGS_CLI="$BRUNO_FLAGS"
+  extract_bruno_folders "$BRUNO_FOLDERS" "BRUNO_FOLDERS_ARRAY"
 
   cd "$TMP_DIR" || return 1
 
@@ -63,7 +55,7 @@ run_bruno_from_test_params() {
   export -f run_collection_body resolve_folders run_bru write_allure_placeholder wait_for_collection_slot
 
   export TMP_DIR PATH_TO_ATTACHMENTS_DIR PATH_TO_ALLURE_RESULTS
-  export BRU_BIN BRUNO_ENV_STR BRUNO_ENV_VARS_CLI BRUNO_FLAGS_CLI
+  export BRU_BIN BRUNO_ENV_STR BRUNO_FLAGS_CLI
 
   if [ "${#BRUNO_FOLDERS_ARRAY[@]}" -gt 0 ]; then
     BRUNO_FOLDERS_STR=$(printf "%s\n" "${BRUNO_FOLDERS_ARRAY[@]}")

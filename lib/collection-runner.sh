@@ -57,7 +57,7 @@ resolve_folders() {
 #   $@ (remaining)  Optional folder paths to restrict the run
 #
 # Globals read:  BRU_BIN, COLLECTION_TIMEOUT, BRUNO_FLAGS_CLI,
-#                BRUNO_ENV_STR, BRUNO_ENV_VARS_CLI
+#                BRUNO_ENV_STR
 # Returns:       exit code from bru.js (propagated through the pipe via PIPESTATUS)
 # ---------------------------------------------------------------------------
 run_bru() {
@@ -68,9 +68,8 @@ run_bru() {
   # shellcheck disable=SC2086
   timeout --signal=TERM --kill-after=30s "${COLLECTION_TIMEOUT:-3600}s" \
     "${BRU_BIN}/bru.js" run \
-    ${BRUNO_FLAGS_CLI} \
+    ${BRUNO_FLAGS_CLI:-"--insecure"} \
     --env "${BRUNO_ENV_STR:-envoriment-template.bru}" \
-    ${BRUNO_ENV_VARS_CLI} \
     --reporter-json "${report_path}" \
     "$@" \
     2>&1 | tee "${log_path}"
