@@ -18,8 +18,6 @@ run_tests() {
   echo "🔐 Clearing sensitive environment variables before tests..."
   clear_sensitive_vars
 
-  echo "🚀 Running test suite..."
-
   if [ -f "./start_tests.sh" ]; then
     echo "🚀 Running test suite..."
     chmod +x start_tests.sh
