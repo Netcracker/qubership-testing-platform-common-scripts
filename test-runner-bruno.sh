@@ -14,16 +14,17 @@ run_bruno_from_test_params() {
 
   local bruno_auto_discover=0
   if [ "${#BRUNO_COLLECTIONS_ARRAY[@]}" -eq 0 ]; then
-    echo "❌ No collections provided — discovering all Bruno collections automatically"
+    echo "📋 No collections provided — discovering all Bruno collections automatically"
     discover_bruno_collections "BRUNO_COLLECTIONS_ARRAY"
-    bruno_auto_discover=1
   elif [ "${#BRUNO_COLLECTIONS_ARRAY[@]}" -eq 1 ] && [[ "${BRUNO_COLLECTIONS_ARRAY[0],,}" == "all" ]]; then
     echo "📋 'all' specified — discovering all Bruno collections automatically"
     discover_bruno_collections "BRUNO_COLLECTIONS_ARRAY"
-    bruno_auto_discover=1
   fi
 
-  if [ "$bruno_auto_discover" -eq 1 ]; then
+  if [ "${#BRUNO_COLLECTIONS_ARRAY[@]}" -eq 0 ]; then
+    echo "❌ No collections discovered, please check 'collections' directory or provide collections explicitly"
+    return 1
+  else
     echo "📦 Discovered Bruno collections:"
     printf "  - %s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
   fi

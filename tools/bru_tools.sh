@@ -43,11 +43,12 @@ discover_bruno_collections() {
     local output_var_name="$1"
     local discovered=()
 
+    echo "🔍 Discovering Bruno collections in 'collections' directory"
     mapfile -t discovered < <(
         find collections -mindepth 2 -maxdepth 2 -type f -name "collection.bru" \
             ! -path "*/.git/*" \
             ! -path "*/node_modules/*" \
-            -printf '%h\n' | sort -u
+            -exec dirname {} \; | sort -u
     )
 
     q=''

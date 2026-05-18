@@ -171,6 +171,7 @@ wait_for_collection_slot() {
 run_collection_body() {
   local collection_dir="$1"
   local collection_path="${TMP_DIR}/${collection_dir}"
+  local collection_path_in_collections="${TMP_DIR}/collections/${collection_dir}"
 
   # Deserialise the folder list from the exported string (arrays cannot be
   # exported across process boundaries, so the dispatcher serialises them).
@@ -181,12 +182,12 @@ run_collection_body() {
 
   echo "➡️ Processing collection: $collection_path"
 
-  if [ ! -d "$collection_path" ]; then
-    echo "❌ Collection not found: $collection_path — skipping"
+  if [ ! -d "$collection_path" ] && [ ! -d "$collection_path_in_collections" ]; then
+    echo "❌ Collection not found: $collection_path or $collection_path_in_collections — skipping"
     write_allure_placeholder \
       "skipped" \
       "Collection: $(basename "$collection_dir")" \
-      "Collection directory not found: $collection_path" \
+      "Collection directory not found: $collection_path or $collection_path_in_collections" \
       ""
     return 0
   fi
