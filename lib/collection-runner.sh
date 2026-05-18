@@ -66,7 +66,7 @@ run_bru() {
   shift 2
 
   if [ -n "${BRUNO_ENV_STR}" ]; then
-    local env_flag="--env ${BRUNO_ENV_STR:-envoriment-template.bru}"
+    local env_flag="--env ${BRUNO_ENV_STR}"
   else
     local env_flag=""
   fi
