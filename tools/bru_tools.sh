@@ -37,6 +37,26 @@ extract_bruno_collections() {
     echo -e "$output_message"
 }
 
+# Fill named array with collection root dirs (parent of each collection.bru) under ./collections.
+# Args: $1 — name of the bash array variable to populate
+discover_bruno_collections() {
+    local output_var_name="$1"
+    local discovered=()
+
+    mapfile -t discovered < <(
+        find collections -mindepth 2 -maxdepth 2 -type f -name "collection.bru" \
+            ! -path "*/.git/*" \
+            ! -path "*/node_modules/*" \
+            -printf '%h\n' | sort -u
+    )
+
+    q=''
+    for x in "${discovered[@]}"; do
+        q+=$(printf ' %q' "$x")
+    done
+    eval "$output_var_name=(${q# })"
+}
+
 extract_test_type() {
     local input="$1"
     local output_var_name="$2"
