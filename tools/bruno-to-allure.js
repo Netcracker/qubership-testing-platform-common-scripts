@@ -141,16 +141,25 @@ try {
     const testCaseSteps = [];
 
     const folderParts = splitPathParts(folderStr);
-    const actualCollection = folderParts.length > 0 ? folderParts[0] : collectionName;
-    
-    const subSuiteParts = folderParts.length > 1 ? folderParts.slice(1, -1) : [];
-    const subSuitePath = subSuiteParts.length > 0 ? subSuiteParts.join(" / ") : undefined;
     
     const parentSuite = "Backend (Bruno)";
-    const suite = actualCollection;
-    const packageName = folderParts.length > 0 ? folderParts.join(".") : actualCollection;
-    
-    const testCaseName = folderParts.length > 0 ? folderParts[folderParts.length - 1] : "Root";
+    let suite = collectionName;
+    let subSuite = undefined;
+    let testCaseName = "Unnamed";
+
+    if (folderParts.length === 1) {
+      suite = collectionName;
+      testCaseName = folderParts[0];
+    } else if (folderParts.length === 2) {
+      suite = folderParts[0];
+      testCaseName = folderParts[1];
+    } else if (folderParts.length >= 3) {
+      suite = folderParts[0];
+      subSuite = folderParts.slice(1, -1).join(" / ");
+      testCaseName = folderParts[folderParts.length - 1];
+    }
+
+    const packageName = folderParts.length > 0 ? folderParts.join(".") : collectionName;
 
     for (const test of testsInFolder) {
       const requestId = randomUUID();
@@ -208,7 +217,7 @@ try {
       labels: [
         { name: "parentSuite", value: parentSuite },
         { name: "suite", value: suite },
-        ...(subSuitePath ? [{ name: "subSuite", value: subSuitePath }] : []),
+        ...(subSuite ? [{ name: "subSuite", value: subSuite }] : []),
         { name: "package", value: packageName },
         { name: "framework", value: "bruno" },
         { name: "language", value: "javascript" }
