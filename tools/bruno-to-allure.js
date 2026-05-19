@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* global require, process, __dirname, console */
 
 const fs = require("fs");
 const path = require("path");
@@ -11,16 +10,13 @@ const brunoReportPath = args[0];
 const allureResultsDir = args[1] || path.join(__dirname, "allure-results");
 const collectionName = args[2] || "unknown-collection";
 
-// ensure dir
 if (!fs.existsSync(allureResultsDir)) fs.mkdirSync(allureResultsDir, { recursive: true });
 
-// split Bruno "path" into folder parts (preserve every level)
-function splitPathParts(requestPath) {
-  if (!requestPath) return ["uncategorized"];
-  return requestPath.replace(/\/+|\\+/g, "/").split("/").map(p => p.trim()).filter(Boolean);
+function splitPathParts(pathStr) {
+  if (!pathStr) return [];
+  return String(pathStr).replace(/\/+|\\+/g, "/").split("/").map(p => p.trim()).filter(Boolean);
 }
 
-// Create steps: Request/Response + Assertion steps
 function createSteps(test, id) {
   const requestFilename = `${id}-request.json`;
   const requestHeadersFilename = `${id}-request-headers.json`;
@@ -30,7 +26,7 @@ function createSteps(test, id) {
   const requestHeaders = test.request?.headers || {};
   const requestBody = test.request?.data !== undefined
     ? (typeof test.request.data === "string" ? test.request.data : JSON.stringify(test.request.data, null, 2))
-    : "/* no request body */";
+    : "";
 
   fs.writeFileSync(path.join(allureResultsDir, requestHeadersFilename), JSON.stringify(requestHeaders, null, 2));
   fs.writeFileSync(path.join(allureResultsDir, requestFilename), requestBody, "utf8");
@@ -39,14 +35,13 @@ function createSteps(test, id) {
   const responseHeaders = response.headers || {};
   const responseBody = response.data !== undefined
     ? (typeof response.data === "string" ? response.data : JSON.stringify(response.data, null, 2))
-    : "/* no response body */";
+    : "";
 
   fs.writeFileSync(path.join(allureResultsDir, responseHeadersFilename), JSON.stringify(responseHeaders, null, 2));
   fs.writeFileSync(path.join(allureResultsDir, responseFilename), responseBody, "utf8");
 
   const steps = [];
 
-    // --- Assertions ---
   const allAssertions = [
     ...(test.preRequestTestResults || []),
     ...(test.testResults || []),
@@ -76,7 +71,6 @@ function createSteps(test, id) {
     }
   }
 
-  // Request Headers step
   steps.push({
     name: "Request Headers",
     status: "passed",
@@ -85,7 +79,6 @@ function createSteps(test, id) {
     parameters: Object.entries(requestHeaders).map(([k, v]) => ({ name: k, value: String(v) }))
   });
 
-  // Request Body step
   steps.push({
     name: "Request Body",
     status: "passed",
@@ -93,7 +86,6 @@ function createSteps(test, id) {
     attachments: [{ name: "Request Body", source: requestFilename, type: "application/json" }]
   });
 
-  // Response Headers step
   steps.push({
     name: "Response Headers",
     status: "passed",
@@ -102,7 +94,6 @@ function createSteps(test, id) {
     parameters: Object.entries(responseHeaders).map(([k, v]) => ({ name: k, value: String(v) }))
   });
 
-  // Response Body step
   steps.push({
     name: "Response Body",
     status: assertionsFailed ? "failed" : "passed",
@@ -136,18 +127,19 @@ try {
     const timestamp = test.timestamp ? new Date(test.timestamp).getTime() : Date.now();
     const duration = test.response?.responseTime ?? test.duration ?? 0;
 
-    const parts = splitPathParts(test.path);
+    const folderString = test.folder || test.path || "";
+    const folderParts = splitPathParts(folderString);
+
+    const actualCollection = folderParts.length > 0 ? folderParts[0] : collectionName;
+    const subSuitePath = folderParts.length > 1 ? folderParts.slice(1).join(" / ") : undefined;
 
     const parentSuite = "Backend (Bruno)";
-    const suite = collectionName;
-    const subSuite = parts.length > 1 ? parts.slice(0, -1).join(" / ") : undefined;
-    const packageName = `${collectionName}.${parts.join(".")}`;
+    const suite = actualCollection;
+    const packageName = folderParts.length > 0 ? folderParts.join(".") : actualCollection;
 
     const { steps, assertionsFailed, failedAssertions } = createSteps(test, id, timestamp, duration);
 
-    const initialStatus =
-      test.status === "pass" ? "passed" : "failed";
-
+    const initialStatus = test.status === "pass" ? "passed" : "failed";
     const finalStatus = assertionsFailed ? "failed" : initialStatus;
 
     const allureResult = {
@@ -175,7 +167,7 @@ try {
       labels: [
         { name: "parentSuite", value: parentSuite },
         { name: "suite", value: suite },
-        ...(subSuite ? [{ name: "subSuite", value: subSuite }] : []),
+        ...(subSuitePath ? [{ name: "subSuite", value: subSuitePath }] : []),
         { name: "package", value: packageName },
         { name: "host", value: (() => { try { return new URL(test.request?.url).host } catch { return "n/a"; } })() },
         { name: "framework", value: "bruno" },
@@ -206,4 +198,3 @@ try {
   console.error(`❌ Error processing Bruno report: ${error.message}`);
   process.exit(1);
 }
-
