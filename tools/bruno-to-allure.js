@@ -121,111 +121,76 @@ try {
     throw new Error("Invalid Bruno report format");
   }
 
-  const groupedResults = {};
-  for (const test of results) {
-    const folderStr = test.folder || test.path || "Root";
-    if (!groupedResults[folderStr]) {
-      groupedResults[folderStr] = [];
-    }
-    groupedResults[folderStr].push(test);
-  }
-
   const children = [];
 
-  for (const [folderStr, testsInFolder] of Object.entries(groupedResults)) {
-    const testCaseId = randomUUID();
-    let testCaseStart = Infinity;
-    let testCaseStop = 0;
-    let testCaseStatus = "passed";
-    const testCaseFailedAssertions = [];
-    const testCaseSteps = [];
+  for (const test of results) {
+    const id = randomUUID();
+    const timestamp = test.timestamp ? new Date(test.timestamp).getTime() : Date.now();
+    const duration = test.response?.responseTime ?? test.duration ?? 0;
 
-    const folderParts = splitPathParts(folderStr);
-    
-    const parentSuite = "Backend (Bruno)";
-    let suite = collectionName;
+    const folderString = test.folder || test.path || "";
+    const folderParts = splitPathParts(folderString);
+
+    let parentSuite = collectionName;
+    let suite = "Root";
     let subSuite = undefined;
-    let testCaseName = "Unnamed";
 
     if (folderParts.length === 1) {
-      suite = collectionName;
-      testCaseName = folderParts[0];
+      parentSuite = folderParts[0];
     } else if (folderParts.length === 2) {
-      suite = folderParts[0];
-      testCaseName = folderParts[1];
+      parentSuite = folderParts[0];
+      suite = folderParts[1];
     } else if (folderParts.length >= 3) {
-      suite = folderParts[0];
-      subSuite = folderParts.slice(1, -1).join(" / ");
-      testCaseName = folderParts[folderParts.length - 1];
+      parentSuite = folderParts[0];
+      suite = folderParts[1];
+      subSuite = folderParts.slice(2).join(" / ");
     }
 
     const packageName = folderParts.length > 0 ? folderParts.join(".") : collectionName;
 
-    for (const test of testsInFolder) {
-      const requestId = randomUUID();
-      const timestamp = test.timestamp ? new Date(test.timestamp).getTime() : Date.now();
-      const duration = test.response?.responseTime ?? test.duration ?? 0;
+    const { steps, assertionsFailed, failedAssertions } = createSteps(test, id);
 
-      if (timestamp < testCaseStart) testCaseStart = timestamp;
-      if (timestamp + duration > testCaseStop) testCaseStop = timestamp + duration;
-
-      const { steps, assertionsFailed, failedAssertions } = createSteps(test, requestId);
-
-      const initialStatus = test.status === "pass" ? "passed" : "failed";
-      const requestStatus = assertionsFailed ? "failed" : initialStatus;
-
-      if (requestStatus === "failed") {
-        testCaseStatus = "failed";
-        if (failedAssertions) testCaseFailedAssertions.push(...failedAssertions);
-      }
-
-      testCaseSteps.push({
-        name: test.name || `${test.request?.method || "GET"} ${test.request?.url || ""}`,
-        status: requestStatus,
-        stage: "finished",
-        start: timestamp,
-        stop: timestamp + duration,
-        steps: steps,
-        parameters: [
-          { name: "Method", value: test.request?.method || "GET" },
-          { name: "URL", value: test.request?.url || "n/a" },
-          { name: "Response Code", value: test.response?.status || "n/a" }
-        ]
-      });
-    }
-
-    if (testCaseStart === Infinity) testCaseStart = Date.now();
-    if (testCaseStop === 0) testCaseStop = Date.now();
+    const initialStatus = test.status === "pass" ? "passed" : "failed";
+    const finalStatus = assertionsFailed ? "failed" : initialStatus;
 
     const allureResult = {
-      uuid: testCaseId,
+      uuid: id,
       historyId: randomUUID(),
-      name: testCaseName,
-      fullName: `${packageName}`,
-      status: testCaseStatus,
-      statusDetails: testCaseStatus === "failed" ? {
-        message: testCaseFailedAssertions.length > 0
-            ? testCaseFailedAssertions.map(r => `${r.description || "Test"}: ${r.error || ''}`).join("\n") 
-            : "One or more requests failed in this folder",
-        trace: testCaseFailedAssertions.length > 0
-            ? testCaseFailedAssertions.map(r => `Status: ${r.status || "Failed"}\nDescription: ${r.description || "No description"}\nError: ${r.error || "No details"}\nActual: ${r.actual}\nExpected: ${r.expected}`).join("\n") 
-            : "No details"
+      name: test.name || `${test.request?.method || "GET"} ${test.request?.url || ""}`,
+      fullName: `${packageName}.${test.name || "test"}`,
+      status: finalStatus,
+      statusDetails: finalStatus === "failed" ? {
+        message: failedAssertions?.map(r =>
+          `${r.description || "Test"}: ${r.error || ''}`
+        ).join("\n") || "Test failed",
+        trace: failedAssertions?.map(r =>
+          `Status: ${r.status || "Failed"}\nDescription: ${r.description || "No description"}\nError: ${r.error || "No details"}\nActual: ${r.actual}\nExpected: ${r.expected}`
+        ).join("\n") || "No details"
       } : undefined,
-      steps: testCaseSteps,
-      start: testCaseStart,
-      stop: testCaseStop,
+      steps: steps,
+      parameters: [
+        { name: "Method", value: test.request?.method || "GET" },
+        { name: "URL", value: test.request?.url || "n/a" },
+        { name: "Response Code", value: test.response?.status || "n/a" }
+      ],
+      start: timestamp,
+      stop: timestamp + duration,
       labels: [
+        { name: "epic", value: "Backend (Bruno)" },
         { name: "parentSuite", value: parentSuite },
         { name: "suite", value: suite },
         ...(subSuite ? [{ name: "subSuite", value: subSuite }] : []),
         { name: "package", value: packageName },
+        { name: "host", value: (() => { try { return new URL(test.request?.url).host } catch { return "n/a"; } })() },
         { name: "framework", value: "bruno" },
         { name: "language", value: "javascript" }
-      ].filter(l => l.value !== undefined)
+      ].filter(l => l.value !== undefined),
+      description: test.description || test.name || "No description provided",
+      descriptionHtml: test.description || test.name || "No description provided"
     };
 
-    fs.writeFileSync(path.join(allureResultsDir, `${testCaseId}-result.json`), JSON.stringify(allureResult, null, 2));
-    children.push(testCaseId);
+    fs.writeFileSync(path.join(allureResultsDir, `${id}-result.json`), JSON.stringify(allureResult, null, 2));
+    children.push(id);
   }
 
   const container = {
