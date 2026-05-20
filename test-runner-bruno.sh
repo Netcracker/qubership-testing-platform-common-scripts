@@ -22,6 +22,7 @@ run_bruno_from_test_params() {
   fi
 
   if [ "${#BRUNO_COLLECTIONS_ARRAY[@]}" -eq 0 ]; then
+
     echo "❌ No collections discovered, please check 'collections' directory or provide collections explicitly"
     return 1
   else
@@ -81,9 +82,15 @@ run_bruno_from_test_params() {
 
   local running_jobs=0
   active_collection_pids=()
+  local total="${#BRUNO_COLLECTIONS_ARRAY[@]}"
+  local collection_index=0
 
   for collection in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
-    bash -c 'run_collection_body "$1"' _ "$collection" &
+    collection_index=$((collection_index + 1))
+    local cname
+    cname=$(basename "$collection")
+    local prefix="[${cname}|${collection_index}/${total}]"
+    bash -c 'run_collection_body "$1"' _ "$collection" > >(sed "s#^#${prefix} #") 2>&1 &
     active_collection_pids+=("$!")
     running_jobs=$((running_jobs + 1))
 
