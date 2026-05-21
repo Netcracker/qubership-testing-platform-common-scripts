@@ -5,6 +5,8 @@ const path = require("path");
 const { randomUUID } = require("node:crypto");
 const { URL } = require("node:url");
 
+const JIRA_BASE_URL = process.env.JIRA_URL || "https://default-jira-url.com/browse/";
+
 const args = process.argv.slice(2);
 const brunoReportPath = args[0];
 const allureResultsDir = args[1] || path.join(__dirname, "allure-results");
@@ -166,6 +168,14 @@ try {
 
     const packageName = folderParts.length > 0 ? folderParts.join(".") : collectionName;
 
+    const rawTickets = folderStr.match(/[a-zA-Z]+-\d+/g) || [];
+    const uniqueTickets = [...new Set(rawTickets.map(t => t.toUpperCase()))];
+    const testCaseLinks = uniqueTickets.map(t => ({
+      name: t,
+      url: `${JIRA_BASE_URL}${t}`,
+      type: "issue"
+    }));
+
     for (const test of testsInFolder) {
       const requestId = randomUUID();
       const timestamp = test.timestamp ? new Date(test.timestamp).getTime() : Date.now();
@@ -217,6 +227,7 @@ try {
             : "No details"
       } : undefined,
       steps: testCaseSteps,
+      links: testCaseLinks,
       start: testCaseStart,
       stop: testCaseStop,
       labels: [
