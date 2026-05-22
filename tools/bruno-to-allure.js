@@ -144,25 +144,27 @@ try {
 
     const folderParts = splitPathParts(folderStr);
     
-    let parentSuite = collectionName;
-    let suite = "Root";
+    const parentSuite = "Backend (Bruno)";
+    let suite = collectionName;
     let subSuite = undefined;
     let testCaseName = "Unnamed";
 
-    if (folderParts.length === 1) {
-      parentSuite = collectionName;
+    if (folderParts.length === 0) {
+      suite = collectionName;
+      testCaseName = "Root";
+    } else if (folderParts.length === 1) {
+      suite = collectionName;
       testCaseName = folderParts[0];
     } else if (folderParts.length === 2) {
-      parentSuite = folderParts[0];
+      suite = folderParts[0];
       testCaseName = folderParts[1];
     } else if (folderParts.length === 3) {
-      parentSuite = folderParts[0];
-      suite = folderParts[1];
+      suite = folderParts[0];
+      subSuite = folderParts[1];
       testCaseName = folderParts[2];
     } else if (folderParts.length > 3) {
-      parentSuite = folderParts[0];
-      suite = folderParts[1];
-      subSuite = folderParts.slice(2, -1).join(" / ");
+      suite = folderParts[0];
+      subSuite = folderParts.slice(1, -1).join(" / ");
       testCaseName = folderParts[folderParts.length - 1];
     }
 
@@ -231,7 +233,6 @@ try {
       start: testCaseStart,
       stop: testCaseStop,
       labels: [
-        { name: "epic", value: "Backend (Bruno)" },
         { name: "parentSuite", value: parentSuite },
         { name: "suite", value: suite },
         ...(subSuite ? [{ name: "subSuite", value: subSuite }] : []),
