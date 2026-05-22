@@ -5,7 +5,7 @@ const path = require("path");
 const { randomUUID } = require("node:crypto");
 const { URL } = require("node:url");
 
-const JIRA_BASE_URL = process.env.JIRA_URL || "https://your-jira-domain.com/browse/";
+const JIRA_BASE_URL = process.env.JIRA_URL || "https://tms.netcracker.com/browse/";
 
 const args = process.argv.slice(2);
 const brunoReportPath = args[0];
