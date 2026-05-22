@@ -5,7 +5,7 @@ const path = require("path");
 const { randomUUID } = require("node:crypto");
 const { URL } = require("node:url");
 
-const JIRA_BASE_URL = process.env.JIRA_URL || "https://default-jira-url.com/browse/";
+const JIRA_BASE_URL = process.env.JIRA_URL || "https://your-jira-domain.com/browse/";
 
 const args = process.argv.slice(2);
 const brunoReportPath = args[0];
@@ -173,7 +173,7 @@ try {
     const testCaseLinks = uniqueTickets.map(t => ({
       name: t,
       url: `${JIRA_BASE_URL}${t}`,
-      type: "issue"
+      type: "tms"
     }));
 
     for (const test of testsInFolder) {
@@ -237,7 +237,8 @@ try {
         ...(subSuite ? [{ name: "subSuite", value: subSuite }] : []),
         { name: "package", value: packageName },
         { name: "framework", value: "bruno" },
-        { name: "language", value: "javascript" }
+        { name: "language", value: "javascript" },
+        ...uniqueTickets.map(t => ({ name: "jiraTicketId", value: t }))
       ].filter(l => l.value !== undefined)
     };
 
