@@ -58,20 +58,6 @@ discover_bruno_collections() {
     eval "$output_var_name=(${q# })"
 }
 
-extract_test_type() {
-    local input="$1"
-    local output_var_name="$2"
-    local result=""
-
-    result=$(echo "$input" | jq -r '.execution_list[]?.type')
-    if [[ -n "$result" ]]; then
-        eval "$output_var_name=\"$result\""
-    fi
-
-    local output_message="➡️ Extracted test type:"
-    echo -e "$output_message $result"
-}
-
 
 # Extract Bruno folders from string separated by '|' and convert them to an array
 # Args:

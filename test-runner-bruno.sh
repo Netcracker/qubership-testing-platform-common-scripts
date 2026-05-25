@@ -5,7 +5,10 @@
 #   scripts/tools/bru_tools.sh   (sourced by the caller, entrypoint.sh)
 #   scripts/lib/collection-runner.sh  (sourced here)
 
+# shellcheck disable=SC1091
 source /scripts/lib/collection-runner.sh
+# shellcheck disable=SC1091
+source /scripts/tools/bru_tools.sh
 
 run_bruno_from_test_params() {
   echo "🚀 Bruno execution started"
