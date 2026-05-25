@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# shellcheck disable=SC1091
+source /scripts/tools/bru_tools.sh
+
 run_tests() {
   echo "▶ Starting test execution..."
 
