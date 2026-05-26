@@ -1,7 +1,7 @@
 #!/bin/bash
 
 run_tests() {
-  echo "▶ Starting test execution..."
+  log "▶ Starting test execution..."
 
   # shellcheck disable=SC1091
   if [ -f "/app/scripts/upload-monitor.sh" ]; then
@@ -12,10 +12,10 @@ run_tests() {
     fail "upload-monitor.sh not found"
   fi
 
-  echo "📁 Creating Allure results directory..."
+  log "📁 Creating Allure results directory..."
   mkdir -p "$TMP_DIR/allure-results"
 
-  echo "🔐 Clearing sensitive environment variables before tests..."
+  log "🔐 Clearing sensitive environment variables before tests..."
   clear_sensitive_vars
 
    # Generate trace id
