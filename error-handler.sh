@@ -62,6 +62,13 @@ finalize_once() {
     fi
 
     generate_email_notification_json || true
+
+    # Source runner-specific missed-test detector if provided.
+    if [ -f "/app/detect-missed-tests.sh" ]; then
+      # shellcheck disable=SC1091
+      source "/app/detect-missed-tests.sh" || true
+    fi
+
     push_metrics || true
     save_native_report "$TMP_DIR/${NATIVE_REPORT_DIR:-playwright-report}" || true
     finalize_upload || true
