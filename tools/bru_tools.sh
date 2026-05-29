@@ -75,7 +75,7 @@ extract_bruno_folders() {
         IFS='|' read -ra result_array <<< "$input"
         # Trim leading/trailing spaces
         for i in "${!result_array[@]}"; do
-            result_array[$i]=$(echo "${result_array[$i]}" | xargs)
+            result_array[i]=$(echo "${result_array[$i]}" | xargs)
         done
     fi
 
