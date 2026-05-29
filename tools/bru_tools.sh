@@ -12,13 +12,14 @@ extract_bruno_collections() {
     local result_array=()
 
     # Retrieve the array of collections and save it to a temporary array
-    local result=$(echo "$input" | jq -r '.execution_list[]?.name')
+    local result
+    result=$(echo "$input" | jq -r '.execution_list[]?.name')
     # Split the comma-separated string into an array, trimming whitespace
     if [[ -n "$result" ]]; then
         IFS=',' read -ra result_array <<< "$result"
         # Trim leading/trailing spaces for each element
         for i in "${!result_array[@]}"; do
-            result_array[$i]=$(echo "${result_array[$i]}" | xargs)
+            result_array[i]=$(echo "${result_array[$i]}" | xargs)
         done
     fi
 

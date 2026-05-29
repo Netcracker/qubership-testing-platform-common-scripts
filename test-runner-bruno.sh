@@ -15,7 +15,6 @@ run_bruno_from_test_params() {
 
   extract_bruno_collections "$TEST_PARAMS" "BRUNO_COLLECTIONS_ARRAY"
 
-  local bruno_auto_discover=0
   if [ "${#BRUNO_COLLECTIONS_ARRAY[@]}" -eq 0 ]; then
     echo "📋 No collections provided — discovering all Bruno collections automatically"
     discover_bruno_collections "BRUNO_COLLECTIONS_ARRAY"
