@@ -32,7 +32,8 @@ run_tests() {
     if [ -f "./start_tests.sh" ]; then
       echo "🚀 Running test suite..."
       chmod +x start_tests.sh
-      ./start_tests.sh || TEST_EXIT_CODE=$?
+      ./start_tests.sh 2>&1 | tee "${TMP_DIR:-/tmp}/test-execution.log"
+      TEST_EXIT_CODE=${PIPESTATUS[0]}
     else
       fail "❌ start_tests.sh not found"
     fi
