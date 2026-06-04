@@ -57,6 +57,7 @@ total_tests=0
 passed_tests=0
 failed_tests=0
 skipped_tests=0
+broken_tests=0
 
 # Initialize test details arrays
 declare -a test_details=()
@@ -90,6 +91,11 @@ for result_file in "$ALLURE_RESULTS_DIR"/*-result.json; do
                 log_warning "⚠ $test_name"
                 test_details+=("⚠️ SKIPPED | $test_name")
                 ;;
+            "broken")
+                broken_tests=$((broken_tests + 1))
+                log_error "✗ $test_name (broken)"
+                test_details+=("🔴 BROKEN | $test_name")
+                ;;
             *)
                 log_warning "? $test_name (status: $status)"
                 test_details+=("❓ UNKNOWN | $test_name")
@@ -108,7 +114,7 @@ fi
 
 # Calculate pass rate as percentage (passed / (total - skipped) * 100)
 # Skipped-by-user tests are excluded from the denominator so they do not
-# penalise the pass rate.
+# penalise the pass rate. Broken (OOM/aborted) tests remain in the denominator.
 effective_total=$(( total_tests - skipped_tests ))
 if [ "$effective_total" -le 0 ]; then
     pass_rate="0.00"
@@ -140,6 +146,7 @@ export TEST_TOTAL_COUNT="$total_tests"
 export TEST_PASSED_COUNT="$passed_tests"
 export TEST_FAILED_COUNT="$failed_tests"
 export TEST_SKIPPED_COUNT="$skipped_tests"
+export TEST_BROKEN_COUNT="$broken_tests"
 export TEST_OVERALL_STATUS="$overall_status"
 
 # Create test details string
@@ -161,6 +168,7 @@ echo "Total Tests: $total_tests"
 echo "Passed: $passed_tests"
 echo "Failed: $failed_tests"
 echo "Skipped: $skipped_tests"
+echo "Broken: $broken_tests"
 echo ""
 
 # Export variables for use in other scripts
@@ -171,6 +179,7 @@ echo "TEST_TOTAL_COUNT=$total_tests"
 echo "TEST_PASSED_COUNT=$passed_tests"
 echo "TEST_FAILED_COUNT=$failed_tests"
 echo "TEST_SKIPPED_COUNT=$skipped_tests"
+echo "TEST_BROKEN_COUNT=$broken_tests"
 echo "TEST_OVERALL_STATUS=$overall_status"
 echo "TEST_DETAILS_STRING=<multiline string with test details>"
 
