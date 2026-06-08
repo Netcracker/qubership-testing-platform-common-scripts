@@ -4,6 +4,7 @@
 clone_repository() {
     if [ -d "$TMP_DIR" ] && [ "$(ls -A "$TMP_DIR" 2>/dev/null)" ]; then
         echo "ℹ️ Cloning tests repository is not required, because tests are already in image..."
+        cd "$TMP_DIR"
         return 0
     fi
 
