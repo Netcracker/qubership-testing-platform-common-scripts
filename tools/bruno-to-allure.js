@@ -202,8 +202,10 @@ try {
     JSON.stringify(container, null, 2)
   );
 
+  const triggerAuthor = (process.env.TRIGGER_AUTHOR || "runner").trim();
   const executor = {
-    TRIGGER_AUTHOR: process.env.TRIGGER_AUTHOR || ""
+    name: triggerAuthor,
+    type: "atp3-python-runner"
   };
   fs.writeFileSync(
     path.join(allureResultsDir, "executor.json"),
