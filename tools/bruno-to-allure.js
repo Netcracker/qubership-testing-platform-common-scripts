@@ -201,6 +201,16 @@ try {
     path.join(allureResultsDir, `${randomUUID()}-container.json`),
     JSON.stringify(container, null, 2)
   );
+
+  const executor = {
+    TRIGGER_AUTHOR: process.env.TRIGGER_AUTHOR || ""
+  };
+  fs.writeFileSync(
+    path.join(allureResultsDir, "executor.json"),
+    JSON.stringify(executor, null, 2),
+    "utf8"
+  );
+
   console.log(`✅ Successfully converted Bruno report to Allure format. Results saved in: ${allureResultsDir}`);
 } catch (error) {
   console.error(`❌ Error processing Bruno report: ${error.message}`);
