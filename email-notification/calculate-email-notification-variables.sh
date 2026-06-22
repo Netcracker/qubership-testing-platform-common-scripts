@@ -64,41 +64,74 @@ declare -a test_details=()
 test_details+=("$(printf "%-12s" "Status") | Test Name")
 test_details+=("------------ | ------------------------------------------------------------")
 
-# Process each result file
-for result_file in "$ALLURE_RESULTS_DIR"/*-result.json; do
-    if [ -f "$result_file" ]; then
-        log_info "Processing: $(basename "$result_file")"
-        
-        # Extract test status using jq
-        status=$(jq -r '.status' "$result_file" 2>/dev/null || echo "unknown")
-        test_name=$(jq -r '.name' "$result_file" 2>/dev/null || echo "Unknown Test")
-        test_name=$(printf '%s' "$test_name" | jq -R .)
-        test_name=${test_name:1:-1}
-        case "$status" in
-            "passed")
-                passed_tests=$((passed_tests + 1))
-                log_success "✓ $test_name"
-                test_details+=("✅ PASSED | $test_name")
-                ;;
-            "failed")
-                failed_tests=$((failed_tests + 1))
-                log_error "✗ $test_name"
-                test_details+=("❌ FAILED | $test_name")
-                ;;
-            "skipped")
-                skipped_tests=$((skipped_tests + 1))
-                log_warning "⚠ $test_name"
-                test_details+=("⚠️ SKIPPED | $test_name")
-                ;;
-            *)
-                log_warning "? $test_name (status: $status)"
-                test_details+=("❓ UNKNOWN | $test_name")
-                ;;
-        esac
-        
-        total_tests=$((total_tests + 1))
+# Aggregate results: group retries by historyId, use latest attempt (matches Allure report)
+shopt -s nullglob
+result_files=("$ALLURE_RESULTS_DIR"/*-result.json)
+shopt -u nullglob
+
+if [ ${#result_files[@]} -eq 0 ]; then
+    log_error "No test results found in $ALLURE_RESULTS_DIR"
+    return 1
+fi
+
+aggregated_results=$(jq -s '
+  group_by(
+    if (.historyId // "") != "" then .historyId
+    elif (.fullName // "") != "" then .fullName
+    else .uuid end
+  )
+  | map(
+      . as $group
+      | ($group | max_by(.stop // .start // 0)) as $latest
+      | {
+          name: ($latest.name // "Unknown Test"),
+          status: ($latest.status // "unknown"),
+          retries: (($group | length) - 1)
+        }
+    )
+' "${result_files[@]}")
+
+while IFS= read -r test_row; do
+    status=$(jq -r '.status' <<< "$test_row")
+    test_name=$(jq -r '.name' <<< "$test_row")
+    retries=$(jq -r '.retries' <<< "$test_row")
+    test_name=$(printf '%s' "$test_name" | jq -R .)
+    test_name=${test_name:1:-1}
+
+    retry_label=""
+    if [ "$retries" -gt 0 ]; then
+        if [ "$retries" -eq 1 ]; then
+            retry_label=" (1 retry)"
+        else
+            retry_label=" ($retries retries)"
+        fi
+        log_info "Collapsed $retries retry attempt(s) for: $test_name"
     fi
-done
+
+    case "$status" in
+        "passed")
+            passed_tests=$((passed_tests + 1))
+            log_success "✓ $test_name$retry_label"
+            test_details+=("✅ PASSED$retry_label | $test_name")
+            ;;
+        "failed")
+            failed_tests=$((failed_tests + 1))
+            log_error "✗ $test_name$retry_label"
+            test_details+=("❌ FAILED$retry_label | $test_name")
+            ;;
+        "skipped")
+            skipped_tests=$((skipped_tests + 1))
+            log_warning "⚠ $test_name$retry_label"
+            test_details+=("⚠️ SKIPPED$retry_label | $test_name")
+            ;;
+        *)
+            log_warning "? $test_name (status: $status)$retry_label"
+            test_details+=("❓ UNKNOWN$retry_label | $test_name")
+            ;;
+    esac
+
+    total_tests=$((total_tests + 1))
+done < <(jq -c '.[]' <<< "$aggregated_results")
 
 # Calculate pass rate
 if [ $total_tests -eq 0 ]; then

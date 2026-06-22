@@ -36,8 +36,19 @@ This set of scripts is designed to analyze test results from the `allure-results
 The script analyzes all `*-result.json` files in the `allure-results` folder and outputs:
 - Overall status (PASSED/PARTIAL/FAILED)
 - Pass rate as percentage
-- Number of tests by status
+- Number of unique test cases by status (retries are deduplicated)
 - Exports environment variables
+
+### Retry handling
+
+Playwright/Allure writes one `*-result.json` file per test attempt. When a test is retried, multiple files share the same `historyId`. The script groups results the same way as the Allure report:
+
+- **Group key**: `historyId` (fallback: `fullName`, then `uuid`)
+- **Final status**: latest attempt by `stop` timestamp
+- **Counts**: one row per unique test case, not per result file
+- **Details**: retried tests show a hint, e.g. `PASSED (1 retry) | Test Name`
+
+`TEST_TOTAL_COUNT` is the number of unique test cases, not the number of raw result files.
 
 ### 2. Generating Message
 
@@ -68,7 +79,7 @@ After executing `calculate-email-notification-variables.sh`, the following envir
 
 - `TEST_PASS_RATE` - Pass rate with two decimal places (e.g., "50.00")
 - `TEST_PASS_RATE_ROUNDED` - Rounded pass rate (e.g., "50")
-- `TEST_TOTAL_COUNT` - Total number of tests
+- `TEST_TOTAL_COUNT` - Total number of unique test cases (retries deduplicated)
 - `TEST_PASSED_COUNT` - Number of passed tests
 - `TEST_FAILED_COUNT` - Number of failed tests
 - `TEST_SKIPPED_COUNT` - Number of skipped tests
@@ -107,19 +118,25 @@ The following placeholders are used in the `email-notification-body-template.txt
 ## Example Output
 
 ```log
-ℹ️ Analyzing test results from: /c/Projects/Cursor AI projects/atp3-common-scripts/allure-results
-ℹ️ Processing: 1903d409-587a-44ac-ba5d-b96dfda66c20-result.json
-❌ ✗ Comprehensive Jira integration test - FAILING @pipeline_job
-ℹ️ Processing: 41085784-d601-466e-b9b3-929d73d12100-result.json
-✅ ✓ Comprehensive Jira integration test @pipeline_job
+ℹ️ Analyzing test results from: /tmp/clone/allure-results
+ℹ️ Collapsed 1 retry attempt(s) for: Comprehensive Jira integration test @pipeline_job
+✅ ✓ Comprehensive Jira integration test @pipeline_job (1 retry)
 
 ℹ️ === Test Results Summary ===
-Overall Status: FAILED
-Pass Rate: 50.00%
-Total Tests: 2
+Overall Status: PASSED
+Pass Rate: 100.00%
+Total Tests: 1
 Passed: 1
-Failed: 1
+Failed: 0
 Skipped: 0
+```
+
+Test details include the retry hint when applicable:
+
+```text
+Status       | Test Name
+------------ | ------------------------------------------------------------
+✅ PASSED (1 retry) | Comprehensive Jira integration test @pipeline_job
 ```
 
 ## Integration with Other Scripts
