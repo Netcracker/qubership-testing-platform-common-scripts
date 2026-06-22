@@ -180,6 +180,7 @@ try {
         { name: "host", value: (() => { try { return new URL(test.request?.url).host } catch { return "n/a"; } })() },
         { name: "framework", value: "bruno" },
         { name: "language", value: "javascript" }
+        { name: "User", value: process.env.TRIGGER_AUTHOR || "runner" }
       ].filter(l => l.value !== undefined),
       description: test.description || test.name || "No description provided",
       descriptionHtml: test.description || test.name || "No description provided"
