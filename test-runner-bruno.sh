@@ -49,7 +49,7 @@ run_bruno_from_test_params() {
     echo "BRUNO_ENV=${BRUNO_ENV_STR}"
     while IFS= read -r key; do
       case "$key" in
-        *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME)
+        *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME|ATP_APPLICATION_VERSION)
           printf '%s=%s\n' "$key" "${!key}"
           export "${key?}"
           echo "  Exported: $key" >&2
