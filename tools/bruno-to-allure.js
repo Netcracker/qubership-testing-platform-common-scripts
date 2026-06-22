@@ -179,7 +179,8 @@ try {
         { name: "package", value: packageName },
         { name: "host", value: (() => { try { return new URL(test.request?.url).host } catch { return "n/a"; } })() },
         { name: "framework", value: "bruno" },
-        { name: "language", value: "javascript" }
+        { name: "language", value: "javascript" },
+        { name: "user", value: process.env.TRIGGER_AUTHOR || "runner" }
       ].filter(l => l.value !== undefined),
       description: test.description || test.name || "No description provided",
       descriptionHtml: test.description || test.name || "No description provided"
@@ -201,6 +202,18 @@ try {
     path.join(allureResultsDir, `${randomUUID()}-container.json`),
     JSON.stringify(container, null, 2)
   );
+
+  const triggerAuthor = (process.env.TRIGGER_AUTHOR || "runner").trim();
+  const executor = {
+    name: triggerAuthor,
+    type: "atp3-python-runner"
+  };
+  fs.writeFileSync(
+    path.join(allureResultsDir, "executor.json"),
+    JSON.stringify(executor, null, 2),
+    "utf8"
+  );
+
   console.log(`✅ Successfully converted Bruno report to Allure format. Results saved in: ${allureResultsDir}`);
 } catch (error) {
   console.error(`❌ Error processing Bruno report: ${error.message}`);
