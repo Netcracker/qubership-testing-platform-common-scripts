@@ -57,6 +57,7 @@ total_tests=0
 passed_tests=0
 failed_tests=0
 skipped_tests=0
+broken_tests=0
 
 # Initialize test details arrays
 declare -a test_details=()
@@ -90,6 +91,11 @@ for result_file in "$ALLURE_RESULTS_DIR"/*-result.json; do
                 log_warning "⚠ $test_name"
                 test_details+=("⚠️ SKIPPED | $test_name")
                 ;;
+            "broken")
+                broken_tests=$((broken_tests + 1))
+                log_error "✗ $test_name (broken)"
+                test_details+=("🔴 BROKEN | $test_name")
+                ;;
             *)
                 log_warning "? $test_name (status: $status)"
                 test_details+=("❓ UNKNOWN | $test_name")
@@ -106,16 +112,22 @@ if [ $total_tests -eq 0 ]; then
     return 1
 fi
 
-# Calculate pass rate as percentage (passed / total * 100)
-if [ "$BC_AVAILABLE" = true ]; then
-    pass_rate=$(echo "scale=2; $passed_tests * 100 / $total_tests" | bc)
-    pass_rate_rounded=$(echo "scale=0; $passed_tests * 100 / $total_tests" | bc)
+# Calculate pass rate as percentage (passed / (total - skipped) * 100)
+# Skipped-by-user tests are excluded from the denominator so they do not
+# penalise the pass rate. Broken (OOM/aborted) tests remain in the denominator.
+effective_total=$(( total_tests - skipped_tests ))
+if [ "$effective_total" -le 0 ]; then
+    pass_rate="0.00"
+    pass_rate_rounded="0"
+elif [ "$BC_AVAILABLE" = true ]; then
+    pass_rate=$(echo "scale=2; $passed_tests * 100 / $effective_total" | bc)
+    pass_rate_rounded=$(echo "scale=0; $passed_tests * 100 / $effective_total" | bc)
 else
     # Use awk for calculations if bc is not available
-    pass_rate=$(awk -v p="$passed_tests" -v t="$total_tests" \
-    'BEGIN { if (t > 0) printf "%.2f", p * 100 / t; else print "0.00" }')
-    pass_rate_rounded=$(awk -v p="$passed_tests" -v t="$total_tests" \
-    'BEGIN { if (t > 0) printf "%.0f", p * 100 / t; else print "0" }')
+    pass_rate=$(awk -v p="$passed_tests" -v t="$effective_total" \
+    'BEGIN { printf "%.2f", p * 100 / t }')
+    pass_rate_rounded=$(awk -v p="$passed_tests" -v t="$effective_total" \
+    'BEGIN { printf "%.0f", p * 100 / t }')
 fi
 
 # Determine overall status
@@ -134,6 +146,7 @@ export TEST_TOTAL_COUNT="$total_tests"
 export TEST_PASSED_COUNT="$passed_tests"
 export TEST_FAILED_COUNT="$failed_tests"
 export TEST_SKIPPED_COUNT="$skipped_tests"
+export TEST_BROKEN_COUNT="$broken_tests"
 export TEST_OVERALL_STATUS="$overall_status"
 
 # Create test details string
@@ -155,6 +168,7 @@ echo "Total Tests: $total_tests"
 echo "Passed: $passed_tests"
 echo "Failed: $failed_tests"
 echo "Skipped: $skipped_tests"
+echo "Broken: $broken_tests"
 echo ""
 
 # Export variables for use in other scripts
@@ -165,6 +179,7 @@ echo "TEST_TOTAL_COUNT=$total_tests"
 echo "TEST_PASSED_COUNT=$passed_tests"
 echo "TEST_FAILED_COUNT=$failed_tests"
 echo "TEST_SKIPPED_COUNT=$skipped_tests"
+echo "TEST_BROKEN_COUNT=$broken_tests"
 echo "TEST_OVERALL_STATUS=$overall_status"
 echo "TEST_DETAILS_STRING=<multiline string with test details>"
 
