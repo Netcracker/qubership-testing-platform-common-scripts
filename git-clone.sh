@@ -96,12 +96,12 @@ clone_repository() {
     # ============================================
     # Download archive with enhanced error handling
     # - connect timeout: 30s
-    # - max time: 120s
+    # - max time: 120s (default)
     # ============================================
     HTTP_CODE="$(
         curl -sS -L \
-            --connect-timeout 30 \
-            --max-time 120 \
+            --connect-timeout "${GIT_CLONE_CONNECT_TIMEOUT:-30}" \
+            --max-time "${GIT_CLONE_MAX_TIME:-120}" \
             --fail \
             -H "PRIVATE-TOKEN: ${ATP_TESTS_GIT_TOKEN}" \
             "$ARCHIVE_URL" \
