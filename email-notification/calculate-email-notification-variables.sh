@@ -25,6 +25,7 @@ log_warning() {
 log_error() {
     echo "❌ $1"
 }
+
 # shellcheck disable=SC2034
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

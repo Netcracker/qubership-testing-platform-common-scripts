@@ -28,6 +28,7 @@ generate_email_notification_json() {
     log_error() {
         echo "❌ $1"
     }
+
     # Get script directory
     local SCRIPT_DIR
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
