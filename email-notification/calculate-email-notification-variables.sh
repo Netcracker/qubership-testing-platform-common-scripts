@@ -58,11 +58,14 @@ passed_tests=0
 failed_tests=0
 skipped_tests=0
 
-# Initialize test details arrays
-declare -a test_details=()
-# Add table header
-test_details+=("$(printf "%-12s" "Status") | Test Name")
-test_details+=("------------ | ------------------------------------------------------------")
+# Stream test details to file (avoids ARG_MAX from giant in-memory strings)
+TEST_DETAILS_DIR="/tmp/clone/scripts/email-notification-generated"
+mkdir -p "$TEST_DETAILS_DIR"
+TEST_DETAILS_FILE="$TEST_DETAILS_DIR/test-details.txt"
+{
+    printf '%s | Test Name\n' "$(printf '%-12s' "Status")"
+    printf '%s\n' "------------ | ------------------------------------------------------------"
+} > "$TEST_DETAILS_FILE"
 
 # Process each result file
 for result_file in "$ALLURE_RESULTS_DIR"/*-result.json; do
@@ -78,21 +81,21 @@ for result_file in "$ALLURE_RESULTS_DIR"/*-result.json; do
             "passed")
                 passed_tests=$((passed_tests + 1))
                 log_success "✓ $test_name"
-                test_details+=("✅ PASSED | $test_name")
+                printf '%s\n' "✅ PASSED | $test_name" >> "$TEST_DETAILS_FILE"
                 ;;
             "failed")
                 failed_tests=$((failed_tests + 1))
                 log_error "✗ $test_name"
-                test_details+=("❌ FAILED | $test_name")
+                printf '%s\n' "❌ FAILED | $test_name" >> "$TEST_DETAILS_FILE"
                 ;;
             "skipped")
                 skipped_tests=$((skipped_tests + 1))
                 log_warning "⚠ $test_name"
-                test_details+=("⚠️ SKIPPED | $test_name")
+                printf '%s\n' "⚠️ SKIPPED | $test_name" >> "$TEST_DETAILS_FILE"
                 ;;
             *)
                 log_warning "? $test_name (status: $status)"
-                test_details+=("❓ UNKNOWN | $test_name")
+                printf '%s\n' "❓ UNKNOWN | $test_name" >> "$TEST_DETAILS_FILE"
                 ;;
         esac
         
@@ -136,15 +139,8 @@ export TEST_FAILED_COUNT="$failed_tests"
 export TEST_SKIPPED_COUNT="$skipped_tests"
 export TEST_OVERALL_STATUS="$overall_status"
 
-# Create test details string
-TEST_DETAILS_STRING=""
-for test_detail in "${test_details[@]}"; do
-    if [ -n "$TEST_DETAILS_STRING" ]; then
-        TEST_DETAILS_STRING="$TEST_DETAILS_STRING\n$test_detail"
-    else
-        TEST_DETAILS_STRING="$test_detail"
-    fi
-done
+export TEST_DETAILS_FILE
+unset TEST_DETAILS_STRING
 
 # Display summary
 echo ""
@@ -166,6 +162,6 @@ echo "TEST_PASSED_COUNT=$passed_tests"
 echo "TEST_FAILED_COUNT=$failed_tests"
 echo "TEST_SKIPPED_COUNT=$skipped_tests"
 echo "TEST_OVERALL_STATUS=$overall_status"
-echo "TEST_DETAILS_STRING=<multiline string with test details>"
+echo "TEST_DETAILS_FILE=$TEST_DETAILS_FILE"
 
 log_success "Pass rate calculation completed successfully"
