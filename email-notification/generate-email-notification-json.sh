@@ -76,22 +76,29 @@ generate_email_notification_json() {
         find "$allure_results_dir" -maxdepth 1 -name '*-result.json' -print0 2>/dev/null |
             xargs -0 -r cat -- |
             jq -s '[
-              .[] | {
-                status: (
-                  .status as $s |
-                  if $s == "passed" then "PASSED"
-                  elif $s == "failed" then "FAILED"
-                  elif $s == "skipped" then "SKIPPED"
-                  else "UNKNOWN" end
-                ),
-                test_name: .name,
-                emoji: (
-                  if .status == "passed" then "✅"
-                  elif .status == "failed" then "❌"
-                  elif .status == "skipped" then "⚠️"
-                  else "❓" end
-                )
-              }
+              group_by(
+                if (.historyId // "") != "" then .historyId
+                elif (.fullName // "") != "" then .fullName
+                else .uuid end
+              )
+              | .[]
+              | (max_by(.stop // .start // 0)) as $w
+              | {
+                  status: (
+                    if $w.status == "passed" then "PASSED" 
+                    elif $w.status == "failed" then "FAILED" 
+                    elif $w.status == "skipped" then "SKIPPED" 
+                    else "UNKNOWN" end
+                  ),
+                  test_name: $w.name,
+                  retries: (length - 1),
+                  emoji: (
+                    if $w.status == "passed" then "✅"
+                    elif $w.status == "failed" then "❌"
+                    elif $w.status == "skipped" then "⚠️"
+                    else "❓" end
+                  )
+                }
             ]' 2>/dev/null
     )
     test_details_json="${test_details_json:-[]}"
