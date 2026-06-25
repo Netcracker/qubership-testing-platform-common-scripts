@@ -74,7 +74,8 @@ generate_email_notification_json() {
     local test_details_json
     test_details_json=$(
         find "$allure_results_dir" -maxdepth 1 -name '*-result.json' -print0 2>/dev/null |
-            xargs -0 -r jq -s '[
+            xargs -0 -r cat -- |
+            jq -s '[
               .[] | {
                 status: (
                   .status as $s |
