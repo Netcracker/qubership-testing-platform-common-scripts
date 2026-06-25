@@ -100,8 +100,8 @@ clone_repository() {
     # ============================================
     HTTP_CODE="$(
         curl -sS -L \
-            --connect-timeout "${GIT_CLONE_CONNECT_TIMEOUT:-30}" \
-            --max-time "${GIT_CLONE_MAX_TIME:-120}" \
+            --connect-timeout "${ATP_TESTS_GIT_CLONE_CONNECT_TIMEOUT:-30}" \
+            --max-time "${ATP_TESTS_GIT_CLONE_MAX_TIME:-120}" \
             --fail \
             -H "PRIVATE-TOKEN: ${ATP_TESTS_GIT_TOKEN}" \
             "$ARCHIVE_URL" \
