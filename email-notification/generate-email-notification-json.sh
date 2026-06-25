@@ -83,15 +83,20 @@ generate_email_notification_json() {
               )
               | .[]
               | (max_by(.stop // .start // 0)) as $w
+              | (length - 1) as $retries
+              | (
+                  if $w.status == "passed" then "PASSED"
+                  elif $w.status == "failed" then "FAILED"
+                  elif $w.status == "skipped" then "SKIPPED"
+                  else "UNKNOWN" end
+                ) as $base
               | {
                   status: (
-                    if $w.status == "passed" then "PASSED" 
-                    elif $w.status == "failed" then "FAILED" 
-                    elif $w.status == "skipped" then "SKIPPED" 
-                    else "UNKNOWN" end
+                    if $retries == 0 then $base
+                    elif $retries == 1 then "\($base) (1 retry)"
+                    else "\($base) (\($retries) retries)" end
                   ),
                   test_name: $w.name,
-                  retries: (length - 1),
                   emoji: (
                     if $w.status == "passed" then "✅"
                     elif $w.status == "failed" then "❌"
