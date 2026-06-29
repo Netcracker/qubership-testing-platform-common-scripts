@@ -25,6 +25,7 @@ log_warning() {
 log_error() {
     echo "❌ $1"
 }
+
 # shellcheck disable=SC2034
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -58,47 +59,76 @@ passed_tests=0
 failed_tests=0
 skipped_tests=0
 
-# Initialize test details arrays
-declare -a test_details=()
-# Add table header
-test_details+=("$(printf "%-12s" "Status") | Test Name")
-test_details+=("------------ | ------------------------------------------------------------")
+# Stream test details to file (avoids ARG_MAX from giant in-memory strings)
+TEST_DETAILS_DIR="/tmp/clone/scripts/email-notification-generated"
+mkdir -p "$TEST_DETAILS_DIR"
+TEST_DETAILS_FILE="$TEST_DETAILS_DIR/test-details.txt"
+{
+    printf '%s | Test Name\n' "$(printf '%-12s' "Status")"
+    printf '%s\n' "------------ | ------------------------------------------------------------"
+} > "$TEST_DETAILS_FILE"
 
-# Process each result file
-for result_file in "$ALLURE_RESULTS_DIR"/*-result.json; do
-    if [ -f "$result_file" ]; then
-        log_info "Processing: $(basename "$result_file")"
-        
-        # Extract test status using jq
-        status=$(jq -r '.status' "$result_file" 2>/dev/null || echo "unknown")
-        test_name=$(jq -r '.name' "$result_file" 2>/dev/null || echo "Unknown Test")
-        test_name=$(printf '%s' "$test_name" | jq -R .)
-        test_name=${test_name:1:-1}
-        case "$status" in
-            "passed")
-                passed_tests=$((passed_tests + 1))
-                log_success "✓ $test_name"
-                test_details+=("✅ PASSED | $test_name")
-                ;;
-            "failed")
-                failed_tests=$((failed_tests + 1))
-                log_error "✗ $test_name"
-                test_details+=("❌ FAILED | $test_name")
-                ;;
-            "skipped")
-                skipped_tests=$((skipped_tests + 1))
-                log_warning "⚠ $test_name"
-                test_details+=("⚠️ SKIPPED | $test_name")
-                ;;
-            *)
-                log_warning "? $test_name (status: $status)"
-                test_details+=("❓ UNKNOWN | $test_name")
-                ;;
-        esac
-        
-        total_tests=$((total_tests + 1))
+# ponytail: one jq pass instead of N shell forks; duplicate filter also in generate script
+shopt -s nullglob
+result_files=("$ALLURE_RESULTS_DIR"/*-result.json)
+shopt -u nullglob
+
+aggregated="[]"
+if [ ${#result_files[@]} -gt 0 ]; then
+    aggregated=$(jq -s '
+      group_by(
+        if (.historyId // "") != "" then .historyId
+        elif (.fullName // "") != "" then .fullName
+        else .uuid end
+      )
+      | map(
+          (max_by(.stop // .start // 0)) as $w |
+          { name: $w.name, status: $w.status, retries: (length - 1) }
+        )
+    ' "${result_files[@]}")
+fi
+
+while IFS= read -r row; do
+    status=$(jq -r '.status' <<< "$row")
+    test_name=$(jq -r '.name' <<< "$row")
+    retries=$(jq -r '.retries' <<< "$row")
+    test_name=$(printf '%s' "$test_name" | jq -R .)
+    test_name=${test_name:1:-1}
+
+    retry_hint=""
+    if [ "$retries" -gt 0 ]; then
+        if [ "$retries" -eq 1 ]; then
+            retry_hint=" (1 retry)"
+        else
+            retry_hint=" ($retries retries)"
+        fi
     fi
-done
+
+    log_info "Processing: $test_name"
+    case "$status" in
+        "passed")
+            passed_tests=$((passed_tests + 1))
+            log_success "✓ $test_name"
+            printf '%s\n' "✅ PASSED${retry_hint} | $test_name" >> "$TEST_DETAILS_FILE"
+            ;;
+        "failed")
+            failed_tests=$((failed_tests + 1))
+            log_error "✗ $test_name"
+            printf '%s\n' "❌ FAILED${retry_hint} | $test_name" >> "$TEST_DETAILS_FILE"
+            ;;
+        "skipped")
+            skipped_tests=$((skipped_tests + 1))
+            log_warning "⚠ $test_name"
+            printf '%s\n' "⚠️ SKIPPED${retry_hint} | $test_name" >> "$TEST_DETAILS_FILE"
+            ;;
+        *)
+            log_warning "? $test_name (status: $status)"
+            printf '%s\n' "❓ UNKNOWN${retry_hint} | $test_name" >> "$TEST_DETAILS_FILE"
+            ;;
+    esac
+
+    total_tests=$((total_tests + 1))
+done < <(jq -c '.[]' <<< "$aggregated")
 
 # Calculate pass rate
 if [ $total_tests -eq 0 ]; then
@@ -136,15 +166,8 @@ export TEST_FAILED_COUNT="$failed_tests"
 export TEST_SKIPPED_COUNT="$skipped_tests"
 export TEST_OVERALL_STATUS="$overall_status"
 
-# Create test details string
-TEST_DETAILS_STRING=""
-for test_detail in "${test_details[@]}"; do
-    if [ -n "$TEST_DETAILS_STRING" ]; then
-        TEST_DETAILS_STRING="$TEST_DETAILS_STRING\n$test_detail"
-    else
-        TEST_DETAILS_STRING="$test_detail"
-    fi
-done
+export TEST_DETAILS_FILE
+unset TEST_DETAILS_STRING
 
 # Display summary
 echo ""
@@ -166,6 +189,6 @@ echo "TEST_PASSED_COUNT=$passed_tests"
 echo "TEST_FAILED_COUNT=$failed_tests"
 echo "TEST_SKIPPED_COUNT=$skipped_tests"
 echo "TEST_OVERALL_STATUS=$overall_status"
-echo "TEST_DETAILS_STRING=<multiline string with test details>"
+echo "TEST_DETAILS_FILE=$TEST_DETAILS_FILE"
 
 log_success "Pass rate calculation completed successfully"

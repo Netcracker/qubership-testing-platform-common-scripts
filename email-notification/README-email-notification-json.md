@@ -63,7 +63,8 @@ The script uses the following environment variables for JSON generation:
 - `REPORT_VIEW_HOST_URL` - Host for viewing reports
 - `ALLURE_REPORT_URL` - Path to reports folder
 - `TIMESTAMP` - Timestamp
-- `TEST_DETAILS_STRING` - String with details of all tests (used during generation only; not exported — large runs would exceed ARG_MAX)
+- `TEST_DETAILS_FILE` - Path to text file with test details (for email templates; avoids ARG_MAX on large runs)
+- `TEST_DETAILS_STRING` - **Deprecated.** Legacy fallback only; do not use on large runs
 
 ## Generated JSON Structure
 

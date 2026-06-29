@@ -68,7 +68,7 @@ After executing `calculate-email-notification-variables.sh`, the following envir
 
 - `TEST_PASS_RATE` - Pass rate with two decimal places (e.g., "50.00")
 - `TEST_PASS_RATE_ROUNDED` - Rounded pass rate (e.g., "50")
-- `TEST_TOTAL_COUNT` - Total number of tests
+- `TEST_TOTAL_COUNT` - Total number of unique test cases (retries deduplicated by `historyId`)
 - `TEST_PASSED_COUNT` - Number of passed tests
 - `TEST_FAILED_COUNT` - Number of failed tests
 - `TEST_SKIPPED_COUNT` - Number of skipped tests
@@ -104,23 +104,29 @@ The following placeholders are used in the `email-notification-body-template.txt
 - **PARTIAL** - 80-99% of tests passed successfully
 - **FAILED** - Less than 80% of tests passed successfully
 
+## Retry Deduplication
+
+Playwright retries write one `*-result.json` file per attempt. Scripts group results by `historyId` (falling back to `fullName`, then `uuid`) and keep the latest attempt (`max_by(stop)`). `TEST_TOTAL_COUNT` reflects unique test cases, not raw result files.
+
+Detail lines show retry count when applicable, e.g. `✅ PASSED (1 retry) | Test name`.
+
 ## Example Output
 
 ```log
-ℹ️ Analyzing test results from: /c/Projects/Cursor AI projects/atp3-common-scripts/allure-results
-ℹ️ Processing: 1903d409-587a-44ac-ba5d-b96dfda66c20-result.json
-❌ ✗ Comprehensive Jira integration test - FAILING @pipeline_job
-ℹ️ Processing: 41085784-d601-466e-b9b3-929d73d12100-result.json
+ℹ️ Analyzing test results from: /tmp/clone/allure-results
+ℹ️ Processing: Comprehensive Jira integration test @pipeline_job
 ✅ ✓ Comprehensive Jira integration test @pipeline_job
 
 ℹ️ === Test Results Summary ===
-Overall Status: FAILED
-Pass Rate: 50.00%
-Total Tests: 2
+Overall Status: PASSED
+Pass Rate: 100.00%
+Total Tests: 1
 Passed: 1
-Failed: 1
+Failed: 0
 Skipped: 0
 ```
+
+(One test that failed on first attempt and passed on retry produces two result files but counts as one test at 100% pass rate, with `(1 retry)` in the detail line.)
 
 ## Integration with Other Scripts
 

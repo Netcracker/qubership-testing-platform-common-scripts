@@ -48,7 +48,8 @@ finalize_once() {
       export TEST_FAILED_COUNT=0
       export TEST_SKIPPED_COUNT=0
       export TEST_COVERAGE=0
-      export TEST_DETAILS_STRING=""
+      unset TEST_DETAILS_STRING
+      export TEST_DETAILS_FILE=""
       export EXECUTION_DATE
       EXECUTION_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
       export TIMESTAMP

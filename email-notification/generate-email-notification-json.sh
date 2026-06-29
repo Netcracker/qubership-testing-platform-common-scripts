@@ -28,6 +28,7 @@ generate_email_notification_json() {
     log_error() {
         echo "❌ $1"
     }
+
     # Get script directory
     local SCRIPT_DIR
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -46,6 +47,7 @@ generate_email_notification_json() {
     # Calculate pass rate and test details
     # shellcheck source=/home/runner/work/qubership-testing-platform-common-scripts/qubership-testing-platform-common-scripts/scripts/email-notification/calculate-email-notification-variables.sh
     source "$SCRIPT_DIR/calculate-email-notification-variables.sh" "$allure_results_dir"
+    unset TEST_DETAILS_STRING
 
     # Calculate additional metrics
     if [ -n "${TEST_TOTAL_COUNT:-}" ] && [ "$TEST_TOTAL_COUNT" -gt 0 ]; then
@@ -68,104 +70,38 @@ generate_email_notification_json() {
 
     log_info "Building JSON structure..."
 
-    # Build test details JSON array
-    local test_details_json="["
-    local first_test=true
-    
-    if [ -n "${TEST_DETAILS_STRING:-}" ]; then
-        # Convert \n to actual newlines and process each test detail line
-        # Use process substitution to avoid subshell issues
-        while IFS= read -r line; do
-            # Skip header lines
-            if [[ "$line" =~ ^[[:space:]]*Status[[:space:]]*\| ]] || [[ "$line" =~ ^[[:space:]]*-+[[:space:]]*\| ]]; then
-                continue
-            fi
-            
-            # Extract status and test name from the formatted line
-            if [[ "$line" =~ ^[[:space:]]*([^|]+)\|[[:space:]]*(.+)$ ]]; then
-                local status_part="${BASH_REMATCH[1]// /}"
-                # Keep test name exactly as is (no formatting applied)
-                local test_name="${BASH_REMATCH[2]}"
-                test_name=$(printf '%s' "$test_name" | jq -R .)
-                test_name=${test_name:1:-1}
-                
-                
-                # Determine status and emoji
-                local status="UNKNOWN"
-                local emoji="❓"
-                
-                if [[ "$status_part" =~ PASSED ]]; then
-                    status="PASSED"
-                    emoji="✅"
-                elif [[ "$status_part" =~ FAILED ]]; then
-                    status="FAILED"
-                    emoji="❌"
-                elif [[ "$status_part" =~ SKIPPED ]]; then
-                    status="SKIPPED"
-                    emoji="⚠️"
-                fi
-                
-                # Add comma if not first test
-                if [ "$first_test" = true ]; then
-                    first_test=false
-                else
-                    test_details_json="$test_details_json,"
-                fi
-                
-                # Add test object to JSON array
-                test_details_json="$test_details_json"$'\n    {'$'\n      "status": "'"$status"'",'$'\n      "test_name": "'"$test_name"'",'$'\n      "emoji": "'"$emoji"'"'$'\n    }'
-            fi
-        done < <(echo -e "$TEST_DETAILS_STRING")
-    else
-        # If no test details string, try to get test details from allure results directly
-        log_info "Parsing allure results directly..."
-        
-        # Process each result file directly
-        for result_file in "$allure_results_dir"/*-result.json; do
-            if [ -f "$result_file" ]; then
-                # Extract test status and name using jq
-                local status
-                status=$(jq -r '.status' "$result_file" 2>/dev/null || echo "unknown")
-                local test_name
-                test_name=$(jq -r '.name' "$result_file" 2>/dev/null || echo "Unknown Test")
-                test_name=$(printf '%s' "$test_name" | jq -R .)
-                test_name=${test_name:1:-1}
-                
-                # Determine status and emoji
-                local emoji="❓"
-                case "$status" in
-                    "passed")
-                        status="PASSED"
-                        emoji="✅"
-                        ;;
-                    "failed")
-                        status="FAILED"
-                        emoji="❌"
-                        ;;
-                    "skipped")
-                        status="SKIPPED"
-                        emoji="⚠️"
-                        ;;
-                    *)
-                        status="UNKNOWN"
-                        emoji="❓"
-                        ;;
-                esac
-                
-                # Add comma if not first test
-                if [ "$first_test" = true ]; then
-                    first_test=false
-                else
-                    test_details_json="$test_details_json,"
-                fi
-                
-                # Add test object to JSON array
-                test_details_json="$test_details_json"$'\n    {'$'\n      "status": "'"$status"'",'$'\n      "test_name": "'"$test_name"'",'$'\n      "emoji": "'"$emoji"'"'$'\n    }'
-            fi
-        done
-    fi
-    
-    test_details_json="$test_details_json"$'\n  ]'
+    # stream test_details from allure files; never round-trip TEST_DETAILS_STRING
+    local test_details_json
+    test_details_json=$(
+        find "$allure_results_dir" -maxdepth 1 -name '*-result.json' -print0 2>/dev/null |
+            xargs -0 -r cat -- |
+            jq -s '[
+              group_by(
+                if (.historyId // "") != "" then .historyId
+                elif (.fullName // "") != "" then .fullName
+                else .uuid end
+              )
+              | .[]
+              | (max_by(.stop // .start // 0)) as $w
+              | {
+                  status: (
+                    if $w.status == "passed" then "PASSED" 
+                    elif $w.status == "failed" then "FAILED" 
+                    elif $w.status == "skipped" then "SKIPPED" 
+                    else "UNKNOWN" end
+                  ),
+                  test_name: $w.name,
+                  retries: (length - 1),
+                  emoji: (
+                    if $w.status == "passed" then "✅"
+                    elif $w.status == "failed" then "❌"
+                    elif $w.status == "skipped" then "⚠️"
+                    else "❓" end
+                  )
+                }
+            ]' 2>/dev/null
+    )
+    test_details_json="${test_details_json:-[]}"
 
     # Build complete JSON structure
     local json_content='{

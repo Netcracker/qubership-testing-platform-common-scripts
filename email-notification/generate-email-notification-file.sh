@@ -181,15 +181,14 @@ generate_email_notification_file() {
     }')
 
     # Replace TEST_DETAILS placeholder separately
-    if [ -n "${TEST_DETAILS_STRING:-}" ]; then
-        # Create temporary file with test details
+    if [ -n "${TEST_DETAILS_FILE:-}" ] && [ -f "$TEST_DETAILS_FILE" ]; then
+        temp_details_file="$TEST_DETAILS_FILE"
+        message_content=$(echo "$message_content" | sed "/{{TEST_DETAILS}}/r $temp_details_file" | sed "/{{TEST_DETAILS}}/d")
+    elif [ -n "${TEST_DETAILS_STRING:-}" ]; then
+        # legacy fallback for older callers
         temp_details_file=$(mktemp)
         echo -e "$TEST_DETAILS_STRING" > "$temp_details_file"
-        
-        # Use sed with file input to replace placeholder
         message_content=$(echo "$message_content" | sed "/{{TEST_DETAILS}}/r $temp_details_file" | sed "/{{TEST_DETAILS}}/d")
-        
-        # Clean up temporary file
         rm -f "$temp_details_file"
     else
         message_content=$(echo "$message_content" | sed "s|{{TEST_DETAILS}}|No test details available|g")
