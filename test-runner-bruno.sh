@@ -62,7 +62,7 @@ run_bruno_from_test_params() {
   export -f run_collection_body resolve_folders run_bru write_allure_placeholder wait_for_collection_slot
 
   export TMP_DIR PATH_TO_ATTACHMENTS_DIR PATH_TO_ALLURE_RESULTS
-  export BRU_BIN BRUNO_ENV_STR BRUNO_FLAGS_CLI
+  export BRU_BIN BRUNO_ENV_STR BRUNO_FLAGS_CLI BRUNO_GLOBAL_ENV BRUNO_WORKSPACE_PATH
 
   if [ "${#BRUNO_FOLDERS_ARRAY[@]}" -gt 0 ]; then
     BRUNO_FOLDERS_STR=$(printf "%s\n" "${BRUNO_FOLDERS_ARRAY[@]}")

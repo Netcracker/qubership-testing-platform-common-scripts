@@ -57,7 +57,8 @@ resolve_folders() {
 #   $@ (remaining)  Optional folder paths to restrict the run
 #
 # Globals read:  BRU_BIN, COLLECTION_TIMEOUT, BRUNO_FLAGS_CLI,
-#                BRUNO_ENV_STR
+#                BRUNO_ENV_STR, BRUNO_GLOBAL_ENV, BRUNO_WORKSPACE_PATH,
+#                TMP_DIR
 # Returns:       exit code from bru.js (propagated through the pipe via PIPESTATUS)
 # ---------------------------------------------------------------------------
 run_bru() {
@@ -71,12 +72,23 @@ run_bru() {
     local env_flag=""
   fi
 
+  if [ -n "${BRUNO_GLOBAL_ENV}" ]; then
+    local ws_path=""
+    if [ -n "${BRUNO_WORKSPACE_PATH}" ]; then
+      ws_path="--workspace-path ${BRUNO_WORKSPACE_PATH}"
+    fi
+    local global_env_flags="--global-env ${BRUNO_GLOBAL_ENV} ${ws_path}"
+  else
+    local global_env_flags=""
+  fi
+
   # shellcheck disable=SC2086
   timeout -s TERM -k 30 \
     "${COLLECTION_TIMEOUT:-3600}s" \
     "${BRU_BIN}/bru.js" run \
     ${BRUNO_FLAGS_CLI:-"--insecure"} \
     ${env_flag} \
+    ${global_env_flags} \
     --reporter-json "${report_path}" \
     "$@" \
     2>&1 | tee "${log_path}"
@@ -165,8 +177,9 @@ wait_for_collection_slot() {
 #   $1  collection_dir — path relative to TMP_DIR
 #
 # Globals read:  TMP_DIR, PATH_TO_ATTACHMENTS_DIR, PATH_TO_ALLURE_RESULTS,
-#                BRUNO_FOLDERS_STR, BRU_BIN, BRUNO_ENV_STR,
-#                BRUNO_ENV_VARS_CLI, BRUNO_FLAGS_CLI, COLLECTION_TIMEOUT
+#                BRUNO_FOLDERS_STR, BRU_BIN, BRUNO_ENV_STR, BRUNO_GLOBAL_ENV,
+#                BRUNO_WORKSPACE_PATH, BRUNO_ENV_VARS_CLI, BRUNO_FLAGS_CLI,
+#                COLLECTION_TIMEOUT
 # ---------------------------------------------------------------------------
 run_collection_body() {
   local collection_dir="$1"
