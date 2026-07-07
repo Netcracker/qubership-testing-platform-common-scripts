@@ -28,17 +28,17 @@ run_tests() {
       fail "❌ collections/ directory not found"
     fi
 
-  elif [ "$TEST_TYPE" = "scope" ] || [ "$TEST_TYPE" = "test" ]; then
-    if [ -f "./start_tests.sh" ]; then
-      echo "🚀 Running test suite..."
-      chmod +x start_tests.sh
+  elif [ -f "./start_tests.sh" ]; then
+    echo "🚀 Running test suite..."
+    chmod +x start_tests.sh
+    if [ "$TEST_TYPE" = "scope" ] || [ "$TEST_TYPE" = "test" ]; then
       ./start_tests.sh 2>&1 | tee "${TMP_DIR:-/tmp}/test-execution.log"
       TEST_EXIT_CODE=${PIPESTATUS[0]}
     else
-      fail "❌ start_tests.sh not found"
+      ./start_tests.sh || TEST_EXIT_CODE=$?
     fi
   else
-    fail "❌ Invalid test type: $TEST_TYPE"
+    fail "❌ Invalid test type: $TEST_TYPE or start_tests.sh not found"
   fi
 
   TEST_EXIT_CODE=${TEST_EXIT_CODE:-0}
