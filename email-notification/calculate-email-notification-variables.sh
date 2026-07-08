@@ -136,15 +136,16 @@ if [ $total_tests -eq 0 ]; then
     return 1
 fi
 
-# Calculate pass rate as percentage (passed / total * 100)
+# Calculate pass rate as percentage (passed / (total - skipped) * 100)
+effective_total=$(( total_tests - skipped_tests ))
 if [ "$BC_AVAILABLE" = true ]; then
-    pass_rate=$(echo "scale=2; $passed_tests * 100 / $total_tests" | bc)
-    pass_rate_rounded=$(echo "scale=0; $passed_tests * 100 / $total_tests" | bc)
+    pass_rate=$(echo "scale=2; $passed_tests * 100 / $effective_total" | bc)
+    pass_rate_rounded=$(echo "scale=0; $passed_tests * 100 / $effective_total" | bc)
 else
     # Use awk for calculations if bc is not available
-    pass_rate=$(awk -v p="$passed_tests" -v t="$total_tests" \
+    pass_rate=$(awk -v p="$passed_tests" -v t="$effective_total" \
     'BEGIN { if (t > 0) printf "%.2f", p * 100 / t; else print "0.00" }')
-    pass_rate_rounded=$(awk -v p="$passed_tests" -v t="$total_tests" \
+    pass_rate_rounded=$(awk -v p="$passed_tests" -v t="$effective_total" \
     'BEGIN { if (t > 0) printf "%.0f", p * 100 / t; else print "0" }')
 fi
 
