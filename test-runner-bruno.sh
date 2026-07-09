@@ -36,7 +36,7 @@ run_bruno_from_test_params() {
   BRUNO_FLAGS_CLI="$BRUNO_FLAGS"
   extract_bruno_folders "$BRUNO_FOLDERS" "BRUNO_FOLDERS_ARRAY"
 
-  cd "$TMP_DIR" || return 1
+  cd "${PROJECT_DIR:-$TMP_DIR}" || return 1
 
   PATH_TO_ATTACHMENTS_DIR="${TMP_DIR}/attachments"
   PATH_TO_ALLURE_RESULTS="${TMP_DIR}/allure-results"
@@ -61,7 +61,7 @@ run_bruno_from_test_params() {
   # Export everything the subprocess needs (arrays can't cross fork; serialise folders).
   export -f run_collection_body resolve_folders run_bru write_allure_placeholder wait_for_collection_slot
 
-  export TMP_DIR PATH_TO_ATTACHMENTS_DIR PATH_TO_ALLURE_RESULTS
+  export TMP_DIR PROJECT_DIR PATH_TO_ATTACHMENTS_DIR PATH_TO_ALLURE_RESULTS
   export BRU_BIN BRUNO_ENV_STR BRUNO_FLAGS_CLI
 
   if [ "${#BRUNO_FOLDERS_ARRAY[@]}" -gt 0 ]; then

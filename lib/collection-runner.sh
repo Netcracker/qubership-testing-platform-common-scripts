@@ -162,16 +162,16 @@ wait_for_collection_slot() {
 # failure.
 #
 # Args:
-#   $1  collection_dir — path relative to TMP_DIR
+#   $1  collection_dir — path relative to PROJECT_DIR
 #
-# Globals read:  TMP_DIR, PATH_TO_ATTACHMENTS_DIR, PATH_TO_ALLURE_RESULTS,
+# Globals read:  PROJECT_DIR, TMP_DIR, PATH_TO_ATTACHMENTS_DIR, PATH_TO_ALLURE_RESULTS,
 #                BRUNO_FOLDERS_STR, BRU_BIN, BRUNO_ENV_STR,
 #                BRUNO_ENV_VARS_CLI, BRUNO_FLAGS_CLI, COLLECTION_TIMEOUT
 # ---------------------------------------------------------------------------
 run_collection_body() {
   local collection_dir="$1"
-  local collection_path="${TMP_DIR}/${collection_dir}"
-  local collection_path_in_collections="${TMP_DIR}/collections/${collection_dir}"
+  local collection_path="${PROJECT_DIR:-$TMP_DIR}/${collection_dir}"
+  local collection_path_in_collections="${PROJECT_DIR:-$TMP_DIR}/collections/${collection_dir}"
 
   # Deserialise the folder list from the exported string (arrays cannot be
   # exported across process boundaries, so the dispatcher serialises them).

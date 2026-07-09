@@ -71,7 +71,7 @@ finalize_once() {
     fi
 
     push_metrics || true
-    save_native_report "$TMP_DIR/${NATIVE_REPORT_DIR:-playwright-report}" || true
+    save_native_report "${PROJECT_DIR:-$TMP_DIR}/${NATIVE_REPORT_DIR:-playwright-report}" || true
     finalize_upload || true
     sleep 15
 
