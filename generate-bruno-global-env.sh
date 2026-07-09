@@ -27,6 +27,7 @@ generate_bruno_global_env() {
     fi
 
     workspace_dir="${BRUNO_WORKSPACE_PATH:-$TMP_DIR}"
+    "" > "$workspace_dir/workspace.yml"
     output_dir="${workspace_dir}/environments"
     mkdir -p "$output_dir"
     output_file="atp-generated"
@@ -59,14 +60,13 @@ generate_bruno_global_env() {
               | .value.connections[]
               | to_entries[]
               | .key as $conn
-              | (.key | ascii_upcase) as $conn_upper
               | .value
               | to_entries[]
               | select(.value != null and (.value | tostring) != "")
               | .key as $param
               | (
                   $sys
-                  + (if $conn_upper == "HTTP" then "" else "_" + ($conn | ascii_upcase | gsub("[^A-Z0-9]"; "_")) end)
+                  + "_" + ($conn | ascii_upcase | gsub("[^A-Z0-9]"; "_"))
                   + "_" + ($param | ascii_upcase | gsub("[^A-Z0-9]"; "_"))
                 ) as $name
               | ($param | ascii_downcase) as $param_lower
