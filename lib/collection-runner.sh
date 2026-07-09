@@ -74,7 +74,7 @@ run_bru() {
 
   if [ -n "${BRUNO_GLOBAL_ENV}" ]; then
     local ws_path=""
-    if [ -n "${BRUNO_WORKSPACE_PATH}" ]; then
+    if [ -n "${BRUNO_WORKSPACE_PATH}" && [ -f "${BRUNO_WORKSPACE_PATH}/workspace.yml" ]; then
       ws_path="--workspace-path ${BRUNO_WORKSPACE_PATH}"
     fi
     local global_env_flags="--global-env ${BRUNO_GLOBAL_ENV} ${ws_path}"
