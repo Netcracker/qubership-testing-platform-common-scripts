@@ -152,7 +152,7 @@ fi
 # Determine overall status
 if [ "$pass_rate_rounded" -eq 100 ]; then
     overall_status="PASSED"
-elif [ "$pass_rate_rounded" -ge 80 ]; then
+elif [ "$pass_rate_rounded" -ge "${EXPECTED_PASS_RATE:-80}" ]; then
     overall_status="PARTIAL"
 else
     overall_status="FAILED"
