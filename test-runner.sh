@@ -16,6 +16,11 @@ run_tests() {
 
   echo "📁 Creating Allure results directory..."
   mkdir -p "$TMP_DIR/allure-results"
+  # allure-playwright writes ./allure-results under PROJECT_DIR CWD
+  if [ -n "${PROJECT_DIR:-}" ] && [ "$PROJECT_DIR" != "$TMP_DIR" ]; then
+    rm -rf "$PROJECT_DIR/allure-results"
+    ln -s "$TMP_DIR/allure-results" "$PROJECT_DIR/allure-results"
+  fi
 
   echo "🔐 Clearing sensitive environment variables before tests..."
   clear_sensitive_vars

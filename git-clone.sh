@@ -1,10 +1,151 @@
 #!/bin/bash
 
+_has_repo_markers() {
+    local dir="$1"
+
+    [ -d "$dir/app" ] && return 0
+    [ -d "$dir/tests" ] && return 0
+    find "$dir" -mindepth 1 -type f -iname "*postman_collection*" -print -quit 2>/dev/null | grep -q . && return 0
+    [ -d "$dir/collections" ] && return 0
+    return 1
+}
+
+_is_ignore_structure() {
+    local flag="${ATP_TESTS_IGNORE_STRUCTURE:-}"
+    flag="${flag#"${flag%%[![:space:]]*}"}"
+    flag="${flag%"${flag##*[![:space:]]}"}"
+    case "${flag,,}" in
+        true|1|yes) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Apply an explicit relative ATP_TESTS_PROJECT_ROOT under tmp_dir.
+_apply_project_root() {
+    local tmp_dir="$1"
+    local root_rel="$2"
+
+    root_rel="${root_rel%/}"
+
+    if [[ "$root_rel" == /* ]]; then
+        echo "❌ ERROR: ATP_TESTS_PROJECT_ROOT must be a relative path, got: $root_rel"
+        return 1
+    fi
+
+    if [[ "$root_rel" == ".." || "$root_rel" == ../* || "$root_rel" == */.. || "$root_rel" == */../* ]]; then
+        echo "❌ ERROR: ATP_TESTS_PROJECT_ROOT must not contain '..': $root_rel"
+        return 1
+    fi
+
+    local candidate="$tmp_dir/$root_rel"
+    if [ ! -d "$candidate" ]; then
+        echo "❌ ERROR: ATP_TESTS_PROJECT_ROOT directory not found: $candidate"
+        return 1
+    fi
+
+    if command -v realpath >/dev/null 2>&1; then
+        local resolved tmp_resolved
+        resolved=$(realpath "$candidate")
+        tmp_resolved=$(realpath "$tmp_dir")
+        if [[ "$resolved" != "$tmp_resolved" && "$resolved" != "$tmp_resolved"/* ]]; then
+            echo "❌ ERROR: ATP_TESTS_PROJECT_ROOT escapes clone directory: $root_rel"
+            return 1
+        fi
+        export PROJECT_DIR="$resolved"
+    else
+        export PROJECT_DIR="$candidate"
+    fi
+
+    echo "✅ Project directory set to: $PROJECT_DIR"
+    return 0
+}
+
+# Resolve PROJECT_DIR priorities:
+# 1) ATP_TESTS_PROJECT_ROOT if set
+# 2) current root when app/tests/collections/postman_collection markers exist
+# 3) TestGeneration/ when present (sets ATP_TESTS_PROJECT_ROOT=TestGeneration)
+# 4) otherwise clone root (validation may skip via ATP_TESTS_IGNORE_STRUCTURE)
+_resolve_project_dir() {
+    local tmp_dir="$1"
+    local root_rel="${ATP_TESTS_PROJECT_ROOT:-}"
+
+    root_rel="${root_rel#"${root_rel%%[![:space:]]*}"}"
+    root_rel="${root_rel%"${root_rel##*[![:space:]]}"}"
+
+    if [ -n "$root_rel" ]; then
+        _apply_project_root "$tmp_dir" "$root_rel"
+        return $?
+    fi
+
+    if _has_repo_markers "$tmp_dir"; then
+        export PROJECT_DIR="$tmp_dir"
+        echo "✅ Project directory set to: $PROJECT_DIR"
+        return 0
+    fi
+
+    if [ -d "$tmp_dir/TestGeneration" ]; then
+        export ATP_TESTS_PROJECT_ROOT="TestGeneration"
+        _apply_project_root "$tmp_dir" "TestGeneration"
+        return $?
+    fi
+
+    export PROJECT_DIR="$tmp_dir"
+    echo "ℹ️ No repo markers or TestGeneration/ found; project directory remains: $PROJECT_DIR"
+    return 0
+}
+
+_validate_repo_markers() {
+    local dir="$1"
+
+    if [ -d "$dir/app" ]; then
+        echo "✅ Validation successful. Found 'app/' directory in the repo."
+    elif [ -d "$dir/tests" ]; then
+        echo "✅ Validation successful. Found 'tests/' directory in the repo."
+    elif find "$dir" -mindepth 1 -type f -iname "*postman_collection*" -print -quit 2>/dev/null | grep -q .; then
+        echo "✅ Validation successful. Found 'postman_collection' files in the repo."
+    elif [ -d "$dir/collections" ]; then
+        echo "✅ Validation successful. Found 'collections/' directory in the repo."
+    else
+        if _is_ignore_structure; then
+            echo "⚠️ WARNING: Neither 'app/' nor 'tests/' nor 'collections/' directory nor 'postman_collection' file found."
+            echo "   ATP_TESTS_IGNORE_STRUCTURE=true — skipping structure validation."
+            return 0
+        fi
+        echo "❌ ERROR: Neither 'app/' nor 'tests/' nor 'collections/' directory nor 'postman_collection' file found in the cloned repo!"
+        return 1
+    fi
+
+    return 0
+}
+
+_finalize_clone() {
+    _resolve_project_dir "$TMP_DIR" || return 1
+    _validate_repo_markers "$PROJECT_DIR" || return 1
+    cd "$PROJECT_DIR" || return 1
+
+    if [ -d "$PROJECT_DIR/app" ]; then
+        echo "📋 Contents of $PROJECT_DIR/app directory:"
+        ls -la app
+    elif [ -d "$PROJECT_DIR/tests" ]; then
+        echo "📋 Contents of $PROJECT_DIR/tests directory:"
+        ls -la tests
+    fi
+
+    if [ -f "$TMP_DIR/.gitmodules" ]; then
+        if command -v git >/dev/null 2>&1; then
+            echo "📋 Submodule status:"
+            git submodule status || true
+        fi
+    fi
+
+    return 0
+}
+
 # Git repository cloning module
 clone_repository() {
     if [ -d "$TMP_DIR" ] && [ "$(ls -A "$TMP_DIR" 2>/dev/null)" ]; then
         echo "ℹ️ Cloning tests repository is not required, because tests are already in image..."
-        cd "$TMP_DIR"
+        _finalize_clone || return 1
         return 0
     fi
 
@@ -265,35 +406,7 @@ clone_repository() {
         echo "✅ Repository extracted to: $TMP_DIR"
     fi
 
-    if [ -d "$TMP_DIR/app" ]; then
-        echo "✅ Validation successful. Found 'app/' directory in the repo."
-    elif [ -d "$TMP_DIR/tests" ]; then
-        echo "✅ Validation successful. Found 'tests/' directory in the repo."
-    elif find "$TMP_DIR" -mindepth 1 -type f -iname "*postman_collection*" -print -quit | grep -q .; then
-        echo "✅ Validation successful. Found 'postman_collection' files in the repo."
-    elif [ -d "$TMP_DIR/collections" ]; then
-        echo "✅ Validation successful. Found 'collections/' directory in the repo."
-    else
-        echo "❌ ERROR: Neither 'app/' nor 'tests/' nor 'collections/' directory nor 'postman_collection' file found in the cloned repo!"
-        return 1
-    fi
-
-    cd "$TMP_DIR" || return 1
-
-    if [ -d "$TMP_DIR/app" ]; then
-        echo "📋 Contents of $TMP_DIR/app directory:"
-        ls -la app
-    elif [ -d "$TMP_DIR/tests" ]; then
-        echo "📋 Contents of $TMP_DIR/tests directory:"
-        ls -la tests
-    fi
-
-    if [ -f "$TMP_DIR/.gitmodules" ]; then
-        if command -v git >/dev/null 2>&1; then
-            echo "📋 Submodule status:"
-            git submodule status || true
-        fi
-    fi
+    _finalize_clone || return 1
 
     # Clear Git token from environment for security
     unset ATP_TESTS_GIT_TOKEN
