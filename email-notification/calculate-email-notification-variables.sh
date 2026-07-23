@@ -149,10 +149,11 @@ else
     'BEGIN { if (t > 0) printf "%.0f", p * 100 / t; else print "0" }')
 fi
 
-# Determine overall status
-if [ "$pass_rate_rounded" -eq 100 ]; then
+expected_pass_rate=${EXPECTED_PASS_RATE:-80}
+
+if (( pass_rate_rounded == 100 )); then
     overall_status="PASSED"
-elif [ "$pass_rate_rounded" -ge 80 ]; then
+elif (( pass_rate_rounded >= expected_pass_rate )); then
     overall_status="PARTIAL"
 else
     overall_status="FAILED"
