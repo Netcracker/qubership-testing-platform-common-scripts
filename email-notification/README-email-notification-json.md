@@ -139,6 +139,18 @@ The `generate_email_notification_json` function does not accept parameters.
 The function writes JSON to disk and exports:
 - **Environment variable `JSON_FILE`** - path to JSON file (consumers read file; JSON is not stored in env)
 
+The full payload is built with `jq` (`--arg` / `--argjson`), so special characters in test names, URLs, and environment names are JSON-escaped. After writing, the file is validated with `jq empty`; on failure the generator logs an error, best-effort writes a minimal valid `FAILED` payload, and returns non-zero (callers inside the EXIT trap must not call `fail`).
+
+Optional path overrides for local/regression runs:
+- `ALLURE_RESULTS_DIR`
+- `EMAIL_NOTIFICATION_OUTPUT_DIR`
+
+Regression check (quoted test names):
+
+```bash
+./email-notification/verify-json-escaping.sh
+```
+
 ## Differences from Text Version
 
 1. **Output Format**: JSON instead of text
