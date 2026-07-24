@@ -65,7 +65,8 @@ generate_email_notification_file() {
     log_info "Generating message from template: $template_file"
 
     # Calculate pass rate and test details
-    source "$SCRIPT_DIR/calculate-email-notification-variables.sh" "$allure_results_dir"
+    # shellcheck source=/home/runner/work/qubership-testing-platform-common-scripts/qubership-testing-platform-common-scripts/scripts/email-notification/calculate-email-notification-variables.sh
+    source "$SCRIPT_DIR/calculate-email-notification-variables.sh" "$allure_results_dir" || true
 
     # Calculate additional metrics
     if [ -n "${TEST_TOTAL_COUNT:-}" ] && [ "$TEST_TOTAL_COUNT" -gt 0 ]; then
