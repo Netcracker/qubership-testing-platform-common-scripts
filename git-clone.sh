@@ -141,6 +141,42 @@ _finalize_clone() {
     return 0
 }
 
+_clear_git_insteadOf() {
+    if [ -n "${_GIT_INSTEADOF_KEY:-}" ]; then
+        git config --global --unset-all "$_GIT_INSTEADOF_KEY" 2>/dev/null || true
+        unset _GIT_INSTEADOF_KEY
+    fi
+}
+
+_report_git_fetch_error() {
+    local exit_code="$1"
+    local err_file="$2"
+    local operation="$3"
+    local err_msg=""
+
+    if [ -f "$err_file" ]; then
+        err_msg=$(tr '\n' ' ' < "$err_file" | sed 's/[[:space:]]\+/ /g' | sed 's/[[:space:]]*$//')
+    fi
+
+    if printf '%s' "$err_msg" | grep -qiE 'Authentication failed|could not read Username|HTTP Basic: Access denied|403|401|Invalid username or password'; then
+        echo "❌ ERROR: Authentication failed while ${operation}."
+        echo "   Check that ATP_TESTS_GIT_TOKEN is valid and has access to the repository."
+    elif printf '%s' "$err_msg" | grep -qiE 'not found|Repository not found|Remote branch .* not found|fatal: .* does not exist'; then
+        echo "❌ ERROR: Repository or branch not found while ${operation}."
+        echo "   Check URL and branch:"
+        echo "   - URL: $ATP_TESTS_GIT_REPO_URL"
+        echo "   - Branch: $ATP_TESTS_GIT_REPO_BRANCH"
+    else
+        echo "❌ ERROR: Failed ${operation} (exit code: $exit_code)."
+    fi
+
+    if [ -n "$err_msg" ]; then
+        echo "   git: $err_msg"
+    fi
+
+    return 1
+}
+
 # Git repository cloning module
 clone_repository() {
     if [ -d "$TMP_DIR" ] && [ "$(ls -A "$TMP_DIR" 2>/dev/null)" ]; then
@@ -155,7 +191,7 @@ clone_repository() {
     # Pre-flight validation
     # ============================================
     if [ -z "${ATP_TESTS_GIT_TOKEN:-}" ]; then
-        echo "❌ ERROR: ATP_TESTS_GIT_TOKEN is not set (required to download repository archive)"
+        echo "❌ ERROR: ATP_TESTS_GIT_TOKEN is not set (required to clone repository)"
         return 1
     fi
     if [ -z "${ATP_TESTS_GIT_REPO_URL:-}" ]; then
@@ -170,6 +206,10 @@ clone_repository() {
         echo "❌ ERROR: TMP_DIR is not set"
         return 1
     fi
+    if ! command -v git >/dev/null 2>&1; then
+        echo "❌ ERROR: git is not installed in the container, cannot clone repository"
+        return 1
+    fi
 
     # Basic URL sanity check (no whitespace, http/https)
     if [[ "$ATP_TESTS_GIT_REPO_URL" =~ [[:space:]] ]] || [[ ! "$ATP_TESTS_GIT_REPO_URL" =~ ^https?:// ]]; then
@@ -177,234 +217,57 @@ clone_repository() {
         return 1
     fi
 
-    # Strip .git from URL and extract repo name
-    REPO_PATH=$(echo "$ATP_TESTS_GIT_REPO_URL" | sed 's|\.git$||')
-    GIT_BRANCH_CLEANED=$(echo "$ATP_TESTS_GIT_REPO_BRANCH" | sed 's|/|-|')
-    REPO_NAME=$(basename "$REPO_PATH")
-    ARCHIVE_URL="${REPO_PATH}/-/archive/${ATP_TESTS_GIT_REPO_BRANCH}/${REPO_NAME}-${GIT_BRANCH_CLEANED}.zip"
+    local git_err_path
+    git_err_path="$(mktemp)"
+    unset _GIT_INSTEADOF_KEY
+    trap '_clear_git_insteadOf; rm -f "$git_err_path"' RETURN
 
-    mkdir -p "$TMP_DIR" 2>/dev/null || true
-    ZIP_PATH="$TMP_DIR/repo.zip"
-    CURL_ERR_PATH="$TMP_DIR/curl_download.err"
+    AUTH_REPO_URL="$ATP_TESTS_GIT_REPO_URL"
+    if [[ "$AUTH_REPO_URL" =~ ^https:// ]]; then
+        AUTH_REPO_URL=$(echo "$AUTH_REPO_URL" | sed "s|^https://|https://oauth2:${ATP_TESTS_GIT_TOKEN}@|")
+    fi
 
-    fetch_by_clone_with_submodules() {
-        if ! command -v git >/dev/null 2>&1; then
-            echo "❌ git is not installed in the container, cannot clone repository with submodules"
+    echo "📥 Cloning repository (branch=${ATP_TESTS_GIT_REPO_BRANCH}, depth=1)..."
+
+    rm -rf "$TMP_DIR"
+
+    git clone \
+        --branch "$ATP_TESTS_GIT_REPO_BRANCH" \
+        --single-branch \
+        --depth 1 \
+        "$AUTH_REPO_URL" \
+        "$TMP_DIR" 2>"$git_err_path"
+    clone_exit=$?
+    if [ "$clone_exit" -ne 0 ]; then
+        _report_git_fetch_error "$clone_exit" "$git_err_path" "cloning repository"
+        return 1
+    fi
+
+    cd "$TMP_DIR" || return 1
+
+    if [ -f .gitmodules ]; then
+        echo "🔧 Configuring credential substitution for submodule authentication..."
+
+        local git_host
+        git_host=$(echo "$ATP_TESTS_GIT_REPO_URL" | sed 's|^https://||; s|/.*||')
+        _GIT_INSTEADOF_KEY="url.https://oauth2:${ATP_TESTS_GIT_TOKEN}@${git_host}/.insteadOf"
+        git config --global "$_GIT_INSTEADOF_KEY" "https://${git_host}/"
+
+        echo "📥 Initializing submodules (depth=1)..."
+        git submodule update --init --recursive --depth 1 2>"$git_err_path"
+        submodule_exit=$?
+        if [ "$submodule_exit" -ne 0 ]; then
+            _report_git_fetch_error "$submodule_exit" "$git_err_path" "initializing submodules"
             return 1
         fi
 
-        echo "📥 .gitmodules detected — switching to git clone with submodules..."
-
-        rm -rf "$TMP_DIR"
-
-        AUTH_REPO_URL="$ATP_TESTS_GIT_REPO_URL"
-        if [[ "$AUTH_REPO_URL" =~ ^https:// ]]; then
-            AUTH_REPO_URL=$(echo "$AUTH_REPO_URL" | sed "s|^https://|https://oauth2:${ATP_TESTS_GIT_TOKEN}@|")
-        fi
-
-        git clone \
-            --branch "$ATP_TESTS_GIT_REPO_BRANCH" \
-            --single-branch \
-            "$AUTH_REPO_URL" \
-            "$TMP_DIR" || return 1
-
-        cd "$TMP_DIR" || return 1
-
-        if [ -f .gitmodules ]; then
-            echo "🔧 Configuring credential substitution for submodule authentication..."
-
-            GIT_HOST=$(echo "$ATP_TESTS_GIT_REPO_URL" | sed 's|^https://||; s|/.*||')
-            git config --global \
-                "url.https://oauth2:${ATP_TESTS_GIT_TOKEN}@${GIT_HOST}/.insteadOf" \
-                "https://${GIT_HOST}/"
-        fi
-
-        git submodule update --init --recursive || return 1
-
-        if [ -f .gitmodules ] && [ -n "${GIT_HOST:-}" ]; then
-            git config --global --unset-all \
-                "url.https://oauth2:${ATP_TESTS_GIT_TOKEN}@${GIT_HOST}/.insteadOf" 2>/dev/null || true
-        fi
+        _clear_git_insteadOf
 
         echo "📋 Submodule status after initialization:"
         git submodule status || true
-
-        echo "✅ Repository cloned with submodules to: $TMP_DIR"
-    }
-
-    echo "📥 Downloading archive from: $ARCHIVE_URL"
-
-    # ============================================
-    # Download archive with enhanced error handling
-    # - connect timeout: 30s
-    # - max time: 120s (default)
-    # ============================================
-    HTTP_CODE="$(
-        curl -sS -L \
-            --connect-timeout "${ATP_TESTS_GIT_CLONE_CONNECT_TIMEOUT:-30}" \
-            --max-time "${ATP_TESTS_GIT_CLONE_MAX_TIME:-120}" \
-            --fail \
-            -H "PRIVATE-TOKEN: ${ATP_TESTS_GIT_TOKEN}" \
-            "$ARCHIVE_URL" \
-            -o "$ZIP_PATH" \
-            -w "%{http_code}" \
-            2>"$CURL_ERR_PATH"
-    )"
-    CURL_EXIT_CODE=$?
-
-    # ============================================
-    # Error detection and messaging
-    # ============================================
-    if [ "$CURL_EXIT_CODE" -ne 0 ]; then
-        CURL_ERR_MSG=""
-        if [ -f "$CURL_ERR_PATH" ]; then
-            CURL_ERR_MSG=$(tr '\n' ' ' < "$CURL_ERR_PATH" | sed 's/[[:space:]]\+/ /g' | sed 's/[[:space:]]*$//')
-        fi
-
-        case "$CURL_EXIT_CODE" in
-            6)
-                echo "❌ ERROR: Couldn't resolve host while downloading repository archive."
-                ;;
-            7)
-                echo "❌ ERROR: Failed to connect to host while downloading repository archive."
-                ;;
-            22)
-                # HTTP error (4xx/5xx). We'll handle using HTTP_CODE below.
-                ;;
-            28)
-                echo "❌ ERROR: Download timed out (connect-timeout=30s, max-time=120s)."
-                ;;
-            35)
-                echo "❌ ERROR: SSL/TLS connection error while downloading repository archive."
-                ;;
-            52)
-                echo "❌ ERROR: Empty reply from server while downloading repository archive."
-                ;;
-            56)
-                echo "❌ ERROR: Network receive error while downloading repository archive."
-                ;;
-            *)
-                echo "❌ ERROR: Network error while downloading repository archive (curl exit code: $CURL_EXIT_CODE)."
-                ;;
-        esac
-
-        if [ -n "$CURL_ERR_MSG" ]; then
-            echo "   curl: $CURL_ERR_MSG"
-        fi
-
-        # For non-HTTP curl failures, stop here (HTTP_CODE may be empty/undefined).
-        if [ "$CURL_EXIT_CODE" -ne 22 ]; then
-            return 1
-        fi
     fi
 
-    # HTTP code interpretation (also covers curl --fail exit 22)
-    if [ "$HTTP_CODE" != "200" ]; then
-        case "$HTTP_CODE" in
-            200)
-                ;;
-            000)
-                echo "❌ ERROR: No HTTP response received from server (HTTP 000)."
-                echo "   Check network connectivity and URL: $ARCHIVE_URL"
-                return 1
-                ;;
-            401|403)
-                echo "❌ ERROR: Authentication failed (HTTP $HTTP_CODE)."
-                echo "   Check that ATP_TESTS_GIT_TOKEN is valid and has access to the repository."
-                return 1
-                ;;
-            404)
-                echo "❌ ERROR: Repository or branch not found (HTTP 404)."
-                echo "   Check URL and branch:"
-                echo "   - URL: $ATP_TESTS_GIT_REPO_URL"
-                echo "   - Branch: $ATP_TESTS_GIT_REPO_BRANCH"
-                echo "   - Archive URL: $ARCHIVE_URL"
-                return 1
-                ;;
-            429)
-                echo "❌ ERROR: Rate limited by the server (HTTP 429)."
-                echo "   Try again later or reduce request frequency."
-                return 1
-                ;;
-            5??)
-                echo "❌ ERROR: Server error while downloading archive (HTTP $HTTP_CODE)."
-                echo "   The Git server may be temporarily unavailable."
-                return 1
-                ;;
-            *)
-                echo "❌ ERROR: Failed to download repository archive (HTTP $HTTP_CODE, curl exit code: $CURL_EXIT_CODE)."
-                echo "   Archive URL: $ARCHIVE_URL"
-                return 1
-                ;;
-        esac
-    fi
-
-    # ============================================
-    # Downloaded archive validation
-    # ============================================
-    if [ ! -f "$ZIP_PATH" ] || [ ! -s "$ZIP_PATH" ]; then
-        echo "❌ ERROR: Downloaded file is missing or empty: $ZIP_PATH"
-        return 1
-    fi
-
-    if command -v file >/dev/null 2>&1; then
-        FILE_TYPE="$(file "$ZIP_PATH" 2>/dev/null || true)"
-        if ! printf '%s' "$FILE_TYPE" | grep -qi "zip archive"; then
-            # Git servers sometimes return an HTML login page when the token is invalid/expired.
-            if printf '%s' "$FILE_TYPE" | grep -qi "html"; then
-                echo "❌ ERROR: Downloaded an HTML login page instead of a repository."
-                echo "   Check that ATP_TESTS_GIT_TOKEN is valid and has access to the repository."
-                echo "   Check that the repository URL is correct."
-            else
-                echo "❌ ERROR: Downloaded repository is not recognized as a zip archive."
-            fi
-            echo "   File type: $FILE_TYPE"
-            return 1
-        fi
-    else
-        echo "⚠️ 'file' command not available; skipping zip magic-byte validation."
-    fi
-
-    if command -v unzip >/dev/null 2>&1; then
-        if ! unzip -t "$ZIP_PATH" > /dev/null 2>&1; then
-            echo "❌ ERROR: Archive integrity test failed (unzip -t). Please retry the operation."
-            return 1
-        fi
-    else
-        echo "❌ ERROR: 'unzip' command is not available; cannot validate/extract archive."
-        return 1
-    fi
-
-    echo "📦 Unzipping..."
-    unzip -q "$ZIP_PATH" -d "$TMP_DIR" || {
-        echo "❌ Failed to unzip repository archive"
-        return 1
-    }
-
-    extracted_dir="$TMP_DIR/${REPO_NAME}-${GIT_BRANCH_CLEANED}"
-
-    if [ -f "$extracted_dir/.gitmodules" ]; then
-        rm -rf "$extracted_dir"
-        rm -f "$ZIP_PATH"
-
-        fetch_by_clone_with_submodules || {
-            echo "❌ Failed to clone repository with submodules"
-            return 1
-        }
-    else
-        shopt -s dotglob
-        mv "$extracted_dir"/* "$TMP_DIR" || {
-            shopt -u dotglob
-            echo "❌ Failed to move extracted repository contents"
-            return 1
-        }
-        shopt -u dotglob
-
-        rm -rf "$extracted_dir"
-        rm -f "$ZIP_PATH"
-
-        echo "✅ Repository extracted to: $TMP_DIR"
-    fi
+    echo "✅ Repository cloned to: $TMP_DIR"
 
     _finalize_clone || return 1
 
