@@ -4,13 +4,14 @@
 #   ${VAR_NAME} -> value of $VAR_NAME (must be set; unset vars keep placeholder, warn only).
 
 render_environment_configuration() {
-    local template_path="${TMP_DIR}/environment-configuration/${ENV_CONFIGURATION_TEMPLATE_FILENAME:-environment-configuration-template.json}"
-    local output_path="${TMP_DIR}/environment-configuration.json"
+    local project_dir="${PROJECT_DIR:-${TMP_DIR:-}}"
+    local template_path="${project_dir}/environment-configuration/${ENV_CONFIGURATION_TEMPLATE_FILENAME:-environment-configuration-template.json}"
+    local output_path="${TMP_DIR:-$project_dir}/environment-configuration.json"
     local template_content rendered_content placeholders placeholder var_name var_value
     local missing_vars=()
 
-    if [ -z "${TMP_DIR:-}" ]; then
-        echo "❌ ERROR: TMP_DIR is not set; cannot render environment configuration"
+    if [ -z "$project_dir" ]; then
+        echo "❌ ERROR: PROJECT_DIR or TMP_DIR is not set; cannot render environment configuration"
         return 1
     fi
 
