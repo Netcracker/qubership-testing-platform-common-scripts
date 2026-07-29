@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# Reject Bruno collection dispatch on Playwright runner images.
+# Identity comes from ATP_APPLICATION_VERSION (e.g. atp3-playwright-runner:1.1.11-...).
+assert_collection_allowed_for_runner() {
+  case "${ATP_APPLICATION_VERSION:-}" in
+    atp3-playwright-runner:*)
+      fail "use bruno to run collection (runner: ${ATP_APPLICATION_VERSION})"
+      ;;
+  esac
+}
+
 run_tests() {
   echo "▶ Starting test execution..."
 
@@ -8,6 +18,10 @@ run_tests() {
     source "/app/scripts/upload-monitor.sh"
   elif [ -f "/scripts/upload-monitor.sh" ]; then
     source "/scripts/upload-monitor.sh"
+  elif [ -n "${UPLOAD_MONITOR_SCRIPT:-}" ] && [ -f "$UPLOAD_MONITOR_SCRIPT" ]; then
+    # Optional override for unit tests (writable path outside the image layout).
+    # shellcheck disable=SC1090
+    source "$UPLOAD_MONITOR_SCRIPT"
   else
     fail "upload-monitor.sh not found"
   fi
@@ -26,6 +40,7 @@ run_tests() {
   clear_sensitive_vars
 
   if [ "$TEST_TYPE" = "collection" ]; then
+    assert_collection_allowed_for_runner
     if [ -d "./collections" ]; then
       echo "ℹ️ collections/ detected — running Bruno runner"
       run_bruno_from_test_params || TEST_EXIT_CODE=$?
