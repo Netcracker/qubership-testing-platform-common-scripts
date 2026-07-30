@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Ordered allowlist of relative paths under the clone to try as PROJECT_DIR.
+# First entry that exists and has repo markers wins. Append nested paths as needed.
+PROJECT_ROOT_CANDIDATES=("." "TestGeneration")
+
 _has_repo_markers() {
     local dir="$1"
 
@@ -20,26 +24,32 @@ _is_ignore_structure() {
     esac
 }
 
-# Apply an explicit relative ATP_TESTS_PROJECT_ROOT under tmp_dir.
-_apply_project_root() {
+# Validate a relative allowlist path and set PROJECT_DIR under tmp_dir.
+# Malformed entries (absolute, '..', escape clone) hard-fail — allowlist is developer-owned.
+_set_project_dir_from_rel() {
     local tmp_dir="$1"
     local root_rel="$2"
 
     root_rel="${root_rel%/}"
+    if [ -z "$root_rel" ] || [ "$root_rel" = "." ]; then
+        export PROJECT_DIR="$tmp_dir"
+        echo "✅ Project directory set to: $PROJECT_DIR"
+        return 0
+    fi
 
     if [[ "$root_rel" == /* ]]; then
-        echo "❌ ERROR: ATP_TESTS_PROJECT_ROOT must be a relative path, got: $root_rel"
+        echo "❌ ERROR: PROJECT_ROOT_CANDIDATES entry must be a relative path, got: $root_rel"
         return 1
     fi
 
     if [[ "$root_rel" == ".." || "$root_rel" == ../* || "$root_rel" == */.. || "$root_rel" == */../* ]]; then
-        echo "❌ ERROR: ATP_TESTS_PROJECT_ROOT must not contain '..': $root_rel"
+        echo "❌ ERROR: PROJECT_ROOT_CANDIDATES entry must not contain '..': $root_rel"
         return 1
     fi
 
     local candidate="$tmp_dir/$root_rel"
     if [ ! -d "$candidate" ]; then
-        echo "❌ ERROR: ATP_TESTS_PROJECT_ROOT directory not found: $candidate"
+        echo "❌ ERROR: PROJECT_ROOT_CANDIDATES directory not found: $candidate"
         return 1
     fi
 
@@ -48,7 +58,7 @@ _apply_project_root() {
         resolved=$(realpath "$candidate")
         tmp_resolved=$(realpath "$tmp_dir")
         if [[ "$resolved" != "$tmp_resolved" && "$resolved" != "$tmp_resolved"/* ]]; then
-            echo "❌ ERROR: ATP_TESTS_PROJECT_ROOT escapes clone directory: $root_rel"
+            echo "❌ ERROR: PROJECT_ROOT_CANDIDATES entry escapes clone directory: $root_rel"
             return 1
         fi
         export PROJECT_DIR="$resolved"
@@ -60,37 +70,53 @@ _apply_project_root() {
     return 0
 }
 
-# Resolve PROJECT_DIR priorities:
-# 1) ATP_TESTS_PROJECT_ROOT if set
-# 2) current root when app/tests/collections/postman_collection markers exist
-# 3) TestGeneration/ when present (sets ATP_TESTS_PROJECT_ROOT=TestGeneration)
-# 4) otherwise clone root (validation may skip via ATP_TESTS_IGNORE_STRUCTURE)
+# Resolve PROJECT_DIR from PROJECT_ROOT_CANDIDATES (first match with markers wins).
+# If none match, fall back to clone root (structure validation / IGNORE_STRUCTURE decide next).
 _resolve_project_dir() {
     local tmp_dir="$1"
-    local root_rel="${ATP_TESTS_PROJECT_ROOT:-}"
+    local root_rel candidate
 
-    root_rel="${root_rel#"${root_rel%%[![:space:]]*}"}"
-    root_rel="${root_rel%"${root_rel##*[![:space:]]}"}"
+    for root_rel in "${PROJECT_ROOT_CANDIDATES[@]}"; do
+        root_rel="${root_rel#"${root_rel%%[![:space:]]*}"}"
+        root_rel="${root_rel%"${root_rel##*[![:space:]]}"}"
+        root_rel="${root_rel%/}"
+        if [ -z "$root_rel" ]; then
+            root_rel="."
+        fi
 
-    if [ -n "$root_rel" ]; then
-        _apply_project_root "$tmp_dir" "$root_rel"
+        # Path-safety for non-root entries (hard-fail on malformed allowlist).
+        if [ "$root_rel" != "." ]; then
+            if [[ "$root_rel" == /* ]]; then
+                echo "❌ ERROR: PROJECT_ROOT_CANDIDATES entry must be a relative path, got: $root_rel"
+                return 1
+            fi
+            if [[ "$root_rel" == ".." || "$root_rel" == ../* || "$root_rel" == */.. || "$root_rel" == */../* ]]; then
+                echo "❌ ERROR: PROJECT_ROOT_CANDIDATES entry must not contain '..': $root_rel"
+                return 1
+            fi
+        fi
+
+        if [ "$root_rel" = "." ]; then
+            candidate="$tmp_dir"
+        else
+            candidate="$tmp_dir/$root_rel"
+        fi
+
+        # Missing directory → try next candidate.
+        if [ ! -d "$candidate" ]; then
+            continue
+        fi
+
+        if ! _has_repo_markers "$candidate"; then
+            continue
+        fi
+
+        _set_project_dir_from_rel "$tmp_dir" "$root_rel"
         return $?
-    fi
-
-    if _has_repo_markers "$tmp_dir"; then
-        export PROJECT_DIR="$tmp_dir"
-        echo "✅ Project directory set to: $PROJECT_DIR"
-        return 0
-    fi
-
-    if [ -d "$tmp_dir/TestGeneration" ]; then
-        export ATP_TESTS_PROJECT_ROOT="TestGeneration"
-        _apply_project_root "$tmp_dir" "TestGeneration"
-        return $?
-    fi
+    done
 
     export PROJECT_DIR="$tmp_dir"
-    echo "ℹ️ No repo markers or TestGeneration/ found; project directory remains: $PROJECT_DIR"
+    echo "ℹ️ No PROJECT_ROOT_CANDIDATES match with repo markers; project directory remains: $PROJECT_DIR"
     return 0
 }
 
