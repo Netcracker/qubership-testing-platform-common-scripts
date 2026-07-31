@@ -13,8 +13,8 @@ The test execution process is divided into modular components that can be easily
 ### Core Modules
 
 - **`init.sh`** - Environment initialization and secure AWS/S3 configuration
-- **`git-clone.sh`** - Shallow git clone (`--depth 1`) with optional submodule init (clears Git token)
-- **`render-environment-configuration.sh`** - Renders `environment-configuration/environment-configuration-template.json` under `PROJECT_DIR` (falls back to `TMP_DIR`): substitutes `${VAR_NAME}` from the pod env, writes `environment-configuration.json` under `TMP_DIR` (or project dir), exports `ATP_ENVGENE_CONFIGURATION` and `ENV_SYSTEMS`. Unset placeholders stay in the file (warning only). Call after `clone_repository`.
+- **`git-clone.sh`** - Shallow `git clone --depth 1` with optional submodule init (clears Git token)
+- **`render-environment-configuration.sh`** - Renders `environment-configuration/environment-configuration-template.json` under `PROJECT_DIR`.
 - **`runtime-setup.sh`** - Runtime-specific environment setup
 - **`test-runner.sh`** - Test execution and results collection (clears sensitive vars)
 - **`upload-monitor.sh`** - Event-based upload monitoring and finalization
