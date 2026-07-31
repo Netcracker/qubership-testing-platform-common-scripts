@@ -27,7 +27,7 @@ generate_bruno_global_env() {
     fi
 
     workspace_dir="${BRUNO_WORKSPACE_PATH:-$TMP_DIR}"
-    "" > "$workspace_dir/workspace.yml"
+    : > "$workspace_dir/workspace.yml"
     output_dir="${workspace_dir}/environments"
     mkdir -p "$output_dir"
     output_file="atp-generated"
