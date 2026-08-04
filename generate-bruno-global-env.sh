@@ -44,12 +44,16 @@ generate_bruno_global_env() {
         echo "name: ${output_file}"
         echo "variables:"
 
-        while IFS=$'\t' read -r var_name var_value is_secret; do
+        while IFS=$'\t' read -r var_name var_value; do
             [ -z "$var_name" ] && continue
+            if [ "${DEBUG_MODE:-}" = "true" ]; then
+                echo "🐛 DEBUG: ${var_name}=${var_value}" >&2
+            fi
             echo "  - name: ${var_name}"
             echo "    value: $(_yaml_quote "$var_value")"
             echo "    enabled: true"
-            echo "    secret: ${is_secret}"
+            # Always false: Bruno CLI ignores plaintext values when secret=true
+            echo "    secret: false"
             echo "    type: text"
         done < <(
             jq -r '
@@ -69,11 +73,9 @@ generate_bruno_global_env() {
                   + "_" + ($conn | ascii_upcase | gsub("[^A-Z0-9]"; "_"))
                   + "_" + ($param | ascii_upcase | gsub("[^A-Z0-9]"; "_"))
                 ) as $name
-              | ($param | ascii_downcase) as $param_lower
               | [
                   $name,
-                  (.value | tostring),
-                  (if ($param_lower == "password" or $param_lower == "token" or $param_lower == "secret" or $param_lower == "key") then "true" else "false" end)
+                  (.value | tostring)
                 ]
               | @tsv
             ' <<< "$ATP_ENVGENE_CONFIGURATION"
