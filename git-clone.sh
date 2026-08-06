@@ -24,6 +24,16 @@ _is_ignore_structure() {
     esac
 }
 
+_is_ignore_git_modules() {
+    local flag="${ATP_TESTS_GIT_MODULES_IGNORE:-}"
+    flag="${flag#"${flag%%[![:space:]]*}"}"
+    flag="${flag%"${flag##*[![:space:]]}"}"
+    case "${flag,,}" in
+        true) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # Validate a relative allowlist path and set PROJECT_DIR under tmp_dir.
 # Malformed entries (absolute, '..', escape clone) hard-fail — allowlist is developer-owned.
 _set_project_dir_from_rel() {
@@ -272,25 +282,29 @@ clone_repository() {
     cd "$TMP_DIR" || return 1
 
     if [ -f .gitmodules ]; then
-        echo "🔧 Configuring credential substitution for submodule authentication..."
+        if _is_ignore_git_modules; then
+            echo "⏭️ Git submodule initialization skipped because ATP_TESTS_GIT_MODULES_IGNORE=true."
+        else
+            echo "🔧 Configuring credential substitution for submodule authentication..."
 
-        local git_host
-        git_host=$(echo "$ATP_TESTS_GIT_REPO_URL" | sed 's|^https://||; s|/.*||')
-        _GIT_INSTEADOF_KEY="url.https://oauth2:${ATP_TESTS_GIT_TOKEN}@${git_host}/.insteadOf"
-        git config --global "$_GIT_INSTEADOF_KEY" "https://${git_host}/"
+            local git_host
+            git_host=$(echo "$ATP_TESTS_GIT_REPO_URL" | sed 's|^https://||; s|/.*||')
+            _GIT_INSTEADOF_KEY="url.https://oauth2:${ATP_TESTS_GIT_TOKEN}@${git_host}/.insteadOf"
+            git config --global "$_GIT_INSTEADOF_KEY" "https://${git_host}/"
 
-        echo "📥 Initializing submodules (depth=1)..."
-        git submodule update --init --recursive --depth 1 2>"$git_err_path"
-        submodule_exit=$?
-        if [ "$submodule_exit" -ne 0 ]; then
-            _report_git_fetch_error "$submodule_exit" "$git_err_path" "initializing submodules"
-            return 1
+            echo "📥 Initializing submodules (depth=1)..."
+            git submodule update --init --recursive --depth 1 2>"$git_err_path"
+            submodule_exit=$?
+            if [ "$submodule_exit" -ne 0 ]; then
+                _report_git_fetch_error "$submodule_exit" "$git_err_path" "initializing submodules"
+                return 1
+            fi
+
+            _clear_git_insteadOf
+
+            echo "📋 Submodule status after initialization:"
+            git submodule status || true
         fi
-
-        _clear_git_insteadOf
-
-        echo "📋 Submodule status after initialization:"
-        git submodule status || true
     fi
 
     echo "✅ Repository cloned to: $TMP_DIR"
