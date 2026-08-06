@@ -152,6 +152,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 - `ATP_STORAGE_PROVIDER` - Storage type (`aws` or `minio` or `s3`)
 
 ### Optional Variables
+- `ATP_TESTS_GIT_MODULES_IGNORE` - Boolean; `true` skips recursive Git submodule initialization, while `false` (the default) initializes submodules. Only `true` and `false` are supported
 - `CURRENT_DATE` - Override current date
 - `CURRENT_TIME` - Override current time
 - `ATP_STORAGE_SERVER_URL` - MinIO API host
