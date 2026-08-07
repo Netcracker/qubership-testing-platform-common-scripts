@@ -23,13 +23,10 @@ start_upload_monitoring() {
         echo "🔄 Using sync-based upload monitoring (inotifywait + sync)"
         start_sync_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
         start_sync_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
-        # Recursive: profiler writes under attachments/profiling/<run-id>/
-        start_sync_uploader "$TMP_DIR/attachments/profiling" "${RESULTS_S3_PATH}profiling/" "*" "recursive" &
     else
         echo "📁 Using file-based upload monitoring (inotifywait + cp)"
         start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
         start_inotify_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
-        # cp loses nested paths; profiling relies on finalize sync for structure
     fi
     
     echo "✅ Upload monitoring started"
@@ -77,14 +74,11 @@ start_sync_uploader() {
     WATCH_DIR="$1"
     DEST_PATH="$2"
     FILE_PATTERN="${3:-*}"  # Optional filename filter
-    local RECURSIVE="${4:-}"
-    local INOTIFY_OPTS=(-m -e close_write,create --format '%w%f')
-    [[ "$RECURSIVE" == "recursive" ]] && INOTIFY_OPTS+=(-r)
 
     echo "🔄 Starting sync uploader for $WATCH_DIR => $DEST_PATH (filter: $FILE_PATTERN)"
 
     # Pass credentials as environment variables only for this process
-    inotifywait "${INOTIFY_OPTS[@]}" "$WATCH_DIR" | while read NEW_FILE; do
+    inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read NEW_FILE; do
         FILE_NAME=$(basename "$NEW_FILE")
         if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
             echo "🆕 Matching file: $FILE_NAME - triggering sync"
