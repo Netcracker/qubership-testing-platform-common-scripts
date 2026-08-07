@@ -12,6 +12,7 @@ start_upload_monitoring() {
     # Create attachments directory
     mkdir -p $TMP_DIR/allure-results
     mkdir -p $TMP_DIR/attachments
+    mkdir -p $TMP_DIR/attachments/profiling
     
     # Store credentials for background processes (local variables, not exported)
     _BACKGROUND_S3_KEY="$_LOCAL_S3_KEY"
@@ -22,10 +23,13 @@ start_upload_monitoring() {
         echo "🔄 Using sync-based upload monitoring (inotifywait + sync)"
         start_sync_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
         start_sync_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
+        # Recursive: profiler writes under attachments/profiling/<run-id>/
+        start_sync_uploader "$TMP_DIR/attachments/profiling" "${RESULTS_S3_PATH}profiling/" "*" "recursive" &
     else
         echo "📁 Using file-based upload monitoring (inotifywait + cp)"
         start_inotify_uploader "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" "*result.json" &
         start_inotify_uploader "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" &
+        # cp loses nested paths; profiling relies on finalize sync for structure
     fi
     
     echo "✅ Upload monitoring started"
@@ -73,11 +77,14 @@ start_sync_uploader() {
     WATCH_DIR="$1"
     DEST_PATH="$2"
     FILE_PATTERN="${3:-*}"  # Optional filename filter
+    local RECURSIVE="${4:-}"
+    local INOTIFY_OPTS=(-m -e close_write,create --format '%w%f')
+    [[ "$RECURSIVE" == "recursive" ]] && INOTIFY_OPTS+=(-r)
 
     echo "🔄 Starting sync uploader for $WATCH_DIR => $DEST_PATH (filter: $FILE_PATTERN)"
 
     # Pass credentials as environment variables only for this process
-    inotifywait -m -e close_write,create --format '%w%f' "$WATCH_DIR" | while read NEW_FILE; do
+    inotifywait "${INOTIFY_OPTS[@]}" "$WATCH_DIR" | while read NEW_FILE; do
         FILE_NAME=$(basename "$NEW_FILE")
         if [[ "$FILE_NAME" == $FILE_PATTERN ]]; then
             echo "🆕 Matching file: $FILE_NAME - triggering sync"
@@ -122,10 +129,16 @@ finalize_upload() {
         s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null 2>&1
         s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null 2>&1
         s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null 2>&1
+        if compgen -G "$TMP_DIR/attachments/profiling/*" > /dev/null 2>&1; then
+            s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/profiling/" "${RESULTS_S3_PATH}profiling/" > /dev/null 2>&1
+        fi
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null 2>&1
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null 2>&1
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null 2>&1
+        if compgen -G "$TMP_DIR/attachments/profiling/*" > /dev/null 2>&1; then
+            s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/profiling/" "${RESULTS_S3_PATH}profiling/" > /dev/null 2>&1
+        fi
     fi
 
     # Upload marker file
@@ -134,6 +147,16 @@ finalize_upload() {
         s5cmd --no-verify-ssl cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null 2>&1
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null 2>&1
+    fi
+
+    # Profiling marker (only when profiling artifacts exist)
+    if compgen -G "$TMP_DIR/attachments/profiling/*" > /dev/null 2>&1; then
+        echo "true" > "$TMP_DIR/profiling.uploaded"
+        if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
+            s5cmd --no-verify-ssl cp "$TMP_DIR/profiling.uploaded" "${RESULTS_S3_PATH}profiling.uploaded" > /dev/null 2>&1
+        elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
+            s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$TMP_DIR/profiling.uploaded" "${RESULTS_S3_PATH}profiling.uploaded" > /dev/null 2>&1
+        fi
     fi
 
     # Generate result URLs
@@ -146,14 +169,21 @@ finalize_upload() {
     echo "Results are available at: ${RESULTS_URL}"
     echo "Reports are available at: ${REPORTS_URL}"
     echo "Report view is available at: ${ATP_REPORT_VIEW_UI_URL}/${REPORTS_FOLDER_PATH}index.html"
+    if [[ -n "${PROFILING_URL:-}" ]]; then
+        echo "Profiling results are available at: ${PROFILING_URL}"
+    fi
     
     echo "✅ Upload finalization completed"
 }
 
 # Generate URLs for results
 generate_result_urls() {
+    PROFILING_URL=""
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
         RESULT_URL="${ATP_STORAGE_BUCKET}.${ATP_STORAGE_SERVER_UI_URL}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
+        if compgen -G "$TMP_DIR/attachments/profiling/*" > /dev/null 2>&1; then
+            PROFILING_URL="${ATP_STORAGE_BUCKET}.${ATP_STORAGE_SERVER_UI_URL}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/profiling/"
+        fi
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
         # Generate base64-encoded URLs for MinIO UI
         RESULTS_FOLDER_PATH="Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
@@ -163,6 +193,12 @@ generate_result_urls() {
         REPORTS_FOLDER_PATH="Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/"
         REPORTS_ENCODED_PATH=$(echo -n "${REPORTS_FOLDER_PATH}" | base64)
         REPORTS_URL="${ATP_STORAGE_SERVER_UI_URL}/browser/${ATP_STORAGE_BUCKET}/${REPORTS_ENCODED_PATH}"
+
+        if compgen -G "$TMP_DIR/attachments/profiling/*" > /dev/null 2>&1; then
+            PROFILING_FOLDER_PATH="Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/profiling/"
+            PROFILING_ENCODED_PATH=$(echo -n "${PROFILING_FOLDER_PATH}" | base64)
+            PROFILING_URL="${ATP_STORAGE_SERVER_UI_URL}/browser/${ATP_STORAGE_BUCKET}/${PROFILING_ENCODED_PATH}"
+        fi
     fi
 }
 
