@@ -58,6 +58,27 @@ parse_extra_vars() {
     return 0
 }
 
+validate_playwright_shard() {
+    local shard="${PLAYWRIGHT_SHARD:-}"
+    [[ -z "$shard" ]] && return 0
+
+    if ! [[ "$shard" =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]]; then
+        echo "ERROR: PLAYWRIGHT_SHARD must have the form index/total, got '$shard'" >&2
+        return 1
+    fi
+
+    local index="${BASH_REMATCH[1]}"
+    local total="${BASH_REMATCH[2]}"
+    if (( index > total )); then
+        echo "ERROR: PLAYWRIGHT_SHARD index must not exceed total, got '$shard'" >&2
+        return 1
+    fi
+
+    export PLAYWRIGHT_SHARD_INDEX="$index"
+    export PLAYWRIGHT_SHARD_TOTAL="$total"
+    export RUNNER_MODE="shard"
+}
+
 # Extract test type from JSON input and store in output variable.
 # Args:
 #   $1 - Input JSON string

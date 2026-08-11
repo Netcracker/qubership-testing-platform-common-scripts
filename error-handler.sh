@@ -31,6 +31,7 @@ finalize_once() {
     echo "🔄 EXIT trap triggered with rc=$rc"
 
     set +e
+    export SHARD_EXIT_CODE="$rc"
 
     # When fail() triggered the exit, write a minimal error-state JSON so
     # downstream pipeline stages (e.g. "get ATP report file") receive a valid
@@ -62,15 +63,17 @@ finalize_once() {
       fi
     fi
 
-    generate_email_notification_json || true
+    if [ "${RUNNER_MODE:-full}" != "shard" ]; then
+      generate_email_notification_json || true
 
-    # Source runner-specific missed-test detector if provided.
-    if [ -f "/app/detect-missed-tests.sh" ]; then
-      # shellcheck disable=SC1091
-      source "/app/detect-missed-tests.sh" || true
+      # Source runner-specific missed-test detector if provided.
+      if [ -f "/app/detect-missed-tests.sh" ]; then
+        # shellcheck disable=SC1091
+        source "/app/detect-missed-tests.sh" || true
+      fi
+
+      push_metrics || true
     fi
-
-    push_metrics || true
     save_native_report "${PROJECT_DIR:-$TMP_DIR}/${NATIVE_REPORT_DIR:-playwright-report}" || true
     finalize_upload || true
     sleep 15

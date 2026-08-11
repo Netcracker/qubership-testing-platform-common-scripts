@@ -7,6 +7,10 @@ start_upload_monitoring() {
     # Prepare common S3 paths
     RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
     REPORTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
+    if [ "${RUNNER_MODE:-full}" = "shard" ]; then
+        RESULTS_S3_PATH="${RESULTS_S3_PATH}shards/${PLAYWRIGHT_SHARD_INDEX}/"
+        REPORTS_S3_PATH="${REPORTS_S3_PATH}shards/${PLAYWRIGHT_SHARD_INDEX}/"
+    fi
     ATTACHMENTS_S3_PATH="${REPORTS_S3_PATH}attachments/"
 
     # Create attachments directory
@@ -113,6 +117,10 @@ finalize_upload() {
     # Prepare common S3 paths
     RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
     REPORTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
+    if [ "${RUNNER_MODE:-full}" = "shard" ]; then
+        RESULTS_S3_PATH="${RESULTS_S3_PATH}shards/${PLAYWRIGHT_SHARD_INDEX}/"
+        REPORTS_S3_PATH="${REPORTS_S3_PATH}shards/${PLAYWRIGHT_SHARD_INDEX}/"
+    fi
     ATTACHMENTS_S3_PATH="${REPORTS_S3_PATH}attachments/"
 
     # Restore credentials for final operations
@@ -122,17 +130,42 @@ finalize_upload() {
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
         s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null 2>&1
         s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null 2>&1
-        s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null 2>&1
+        if [ "${RUNNER_MODE:-full}" != "shard" ]; then
+            s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null 2>&1
+        fi
         if compgen -G "$TMP_DIR/attachments/profiling/*" > /dev/null 2>&1; then
             s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/profiling/" "${RESULTS_S3_PATH}profiling/" > /dev/null 2>&1
         fi
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null 2>&1
         s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null 2>&1
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null 2>&1
+        if [ "${RUNNER_MODE:-full}" != "shard" ]; then
+            s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null 2>&1
+        fi
         if compgen -G "$TMP_DIR/attachments/profiling/*" > /dev/null 2>&1; then
             s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/profiling/" "${RESULTS_S3_PATH}profiling/" > /dev/null 2>&1
         fi
+    fi
+
+    if [ "${RUNNER_MODE:-full}" = "shard" ]; then
+        local done_file="$TMP_DIR/shard.done.json"
+        jq -n \
+          --arg schemaVersion "1" \
+          --arg shard "$PLAYWRIGHT_SHARD" \
+          --arg outcome "${SHARD_EXIT_CODE:-0}" \
+          --arg artifactPrefix "Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/shards/${PLAYWRIGHT_SHARD_INDEX}" \
+          --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          '{schemaVersion: ($schemaVersion|tonumber), shard: $shard, exitCode: ($outcome|tonumber), artifactPrefix: $artifactPrefix, completedAt: $completedAt}' > "$done_file"
+        if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
+            s5cmd --no-verify-ssl cp "$TMP_DIR/shard-manifest.json" "${RESULTS_S3_PATH}shard-manifest.json" > /dev/null 2>&1 || true
+            s5cmd --no-verify-ssl cp "$done_file" "${RESULTS_S3_PATH}shard.done.json" > /dev/null 2>&1
+        else
+            s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$TMP_DIR/shard-manifest.json" "${RESULTS_S3_PATH}shard-manifest.json" > /dev/null 2>&1 || true
+            s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$done_file" "${RESULTS_S3_PATH}shard.done.json" > /dev/null 2>&1
+        fi
+        final_cleanup
+        echo "✅ Shard upload finalization completed"
+        return 0
     fi
 
     # Upload marker file

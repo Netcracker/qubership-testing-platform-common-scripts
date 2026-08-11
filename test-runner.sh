@@ -36,6 +36,14 @@ run_tests() {
     ln -s "$TMP_DIR/allure-results" "$PROJECT_DIR/allure-results"
   fi
 
+  if [ "${RUNNER_MODE:-full}" = "shard" ]; then
+    # Capture the exact Playwright slice before execution; the aggregator uses
+    # this manifest to represent tests lost with a failed shard as broken.
+    if [ -f "/app/capture-test-list.sh" ]; then
+      source "/app/capture-test-list.sh"
+    fi
+  fi
+
   echo "🔐 Clearing sensitive environment variables before tests..."
   clear_sensitive_vars
 
