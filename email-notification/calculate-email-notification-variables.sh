@@ -67,6 +67,11 @@ TEST_DETAILS_FILE="$TEST_DETAILS_DIR/test-details.txt"
     printf '%s | Test Name\n' "$(printf '%-12s' "Status")"
     printf '%s\n' "------------ | ------------------------------------------------------------"
 } > "$TEST_DETAILS_FILE"
+TEST_FILE_DETAILS_FILE="$TEST_DETAILS_DIR/test-file-details.txt"
+{
+    printf '%s | Test File\n' "$(printf '%-12s' "Status")"
+    printf '%s\n' "------------ | ------------------------------------------------------------"
+} > "$TEST_FILE_DETAILS_FILE"
 
 # ponytail: one jq pass instead of N shell forks; duplicate filter also in generate script
 shopt -s nullglob
@@ -83,7 +88,12 @@ if [ ${#result_files[@]} -gt 0 ]; then
       )
       | map(
           (max_by(.stop // .start // 0)) as $w |
-          { name: $w.name, status: $w.status, retries: (length - 1) }
+          {
+            name: $w.name,
+            status: $w.status,
+            retries: (length - 1),
+            fullName: ($w.fullName // "")
+          }
         )
     ' "${result_files[@]}")
 fi
@@ -130,6 +140,29 @@ while IFS= read -r row; do
     total_tests=$((total_tests + 1))
 done < <(jq -c '.[]' <<< "$aggregated")
 
+# File rows contain only runnable Playwright spec paths. allure-playwright records
+# fullName as "<relative-file>:<line>:<column>"; non-matching results are omitted.
+jq -r '
+  [
+    .[]
+    | select(.fullName | test("^.+:[0-9]+:[0-9]+$"))
+    | .file = (.fullName | sub(":[0-9]+:[0-9]+$"; ""))
+  ]
+  | group_by(.file)
+  | map({
+      file: .[0].file,
+      status: (
+        if any(.[]; .status != "passed" and .status != "skipped")
+        then "FAILED"
+        else "PASSED"
+        end
+      )
+    })
+  | sort_by([if .status == "FAILED" then 0 else 1 end, .file])
+  | .[]
+  | "\(.status) | \(.file)"
+' <<< "$aggregated" >> "$TEST_FILE_DETAILS_FILE"
+
 # Calculate pass rate
 if [ $total_tests -eq 0 ]; then
     log_error "No test results found in $ALLURE_RESULTS_DIR"
@@ -169,6 +202,7 @@ export TEST_SKIPPED_COUNT="$skipped_tests"
 export TEST_OVERALL_STATUS="$overall_status"
 
 export TEST_DETAILS_FILE
+export TEST_FILE_DETAILS_FILE
 unset TEST_DETAILS_STRING
 
 # Display summary
@@ -192,5 +226,6 @@ echo "TEST_FAILED_COUNT=$failed_tests"
 echo "TEST_SKIPPED_COUNT=$skipped_tests"
 echo "TEST_OVERALL_STATUS=$overall_status"
 echo "TEST_DETAILS_FILE=$TEST_DETAILS_FILE"
+echo "TEST_FILE_DETAILS_FILE=$TEST_FILE_DETAILS_FILE"
 
 log_success "Pass rate calculation completed successfully"

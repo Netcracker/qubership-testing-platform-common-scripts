@@ -50,6 +50,7 @@ finalize_once() {
       export TEST_COVERAGE=0
       unset TEST_DETAILS_STRING
       export TEST_DETAILS_FILE=""
+      export TEST_FILE_DETAILS_FILE=""
       export EXECUTION_DATE
       EXECUTION_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
       export TIMESTAMP
