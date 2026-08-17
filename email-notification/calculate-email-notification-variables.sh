@@ -92,7 +92,12 @@ if [ ${#result_files[@]} -gt 0 ]; then
             name: $w.name,
             status: $w.status,
             retries: (length - 1),
-            fullName: ($w.fullName // "")
+            fullName: ($w.fullName // ""),
+            suite: (
+              ($w.labels // [])
+              | map(select(.name == "suite") | .value)
+              | .[0] // ""
+            )
           }
         )
     ' "${result_files[@]}")
@@ -140,13 +145,61 @@ while IFS= read -r row; do
     total_tests=$((total_tests + 1))
 done < <(jq -c '.[]' <<< "$aggregated")
 
-# File rows contain only runnable Playwright spec paths. allure-playwright records
-# fullName as "<relative-file>:<line>:<column>"; non-matching results are omitted.
-jq -r '
+# File rows are runnable Playwright spec paths, not framework helpers.
+# TagHelper (and similar Engine/Shared wrappers) own allure-playwright's fullName
+# ("<relative-file>:<line>:<column>"); the real spec is the Allure suite label.
+# Leading ../ is stripped so the path can be reused as TEST_PARAMS execution_list[].name.
+# Bare filenames are resolved under the clone when a unique spec file exists.
+clone_root="$(cd "$ALLURE_RESULTS_DIR/.." && pwd)"
+
+_resolve_test_file() {
+    local file="$1"
+    case "$file" in
+        */*) printf '%s' "$file"; return ;;
+    esac
+    [ -d "$clone_root" ] || { printf '%s' "$file"; return; }
+
+    local match="" count=0 candidate
+    while IFS= read -r -d '' candidate; do
+        count=$((count + 1))
+        match="$candidate"
+        [ "$count" -gt 1 ] && break
+    done < <(find "$clone_root" \
+        \( -name node_modules -o -name .git -o -path '*/Engine/Shared' \) -prune \
+        -o -type f -name "$file" -print0 2>/dev/null)
+
+    if [ "$count" -eq 1 ]; then
+        printf '%s' "${match#"$clone_root"/}"
+    else
+        printf '%s' "$file"
+    fi
+}
+
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    status="${line%% | *}"
+    file="${line#* | }"
+    file="$(_resolve_test_file "$file")"
+    printf '%s\n' "$status | $file" >> "$TEST_FILE_DETAILS_FILE"
+done < <(jq -r '
+  def looks_like_spec:
+    test("\\.(test|spec)\\.[cm]?[jt]sx?$");
+  def from_full_name:
+    (.fullName // "")
+    | sub(":[0-9]+:[0-9]+$"; "")
+    | sub("^(\\.\\./)+"; "");
+  def spec_path:
+    (.suite // "") as $suite
+    | from_full_name as $full
+    | if ($suite | looks_like_spec) then $suite
+      elif ($full | looks_like_spec) then $full
+      else empty
+      end;
   [
     .[]
-    | select(.fullName | test("^.+:[0-9]+:[0-9]+$"))
-    | .file = (.fullName | sub(":[0-9]+:[0-9]+$"; ""))
+    | spec_path as $file
+    | select($file != "")
+    | .file = $file
   ]
   | group_by(.file)
   | map({
@@ -161,7 +214,7 @@ jq -r '
   | sort_by([if .status == "FAILED" then 0 else 1 end, .file])
   | .[]
   | "\(.status) | \(.file)"
-' <<< "$aggregated" >> "$TEST_FILE_DETAILS_FILE"
+' <<< "$aggregated")
 
 # Calculate pass rate
 if [ $total_tests -eq 0 ]; then
