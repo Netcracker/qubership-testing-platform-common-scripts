@@ -4,12 +4,48 @@
 # First entry that exists and has repo markers wins. Append nested paths as needed.
 PROJECT_ROOT_CANDIDATES=("." "TestGeneration")
 
+# True if dir has *postman_collection* files of its own.
+# Nested PROJECT_ROOT_CANDIDATES paths are pruned so e.g. TestGeneration/foo.postman_collection.json
+# does not make clone root "." look like it has markers.
+_has_postman_collection() {
+    local dir="$1"
+    local clone_root="$2"
+    local root_rel nested
+    local prune_expr=()
+
+    for root_rel in "${PROJECT_ROOT_CANDIDATES[@]}"; do
+        root_rel="${root_rel#"${root_rel%%[![:space:]]*}"}"
+        root_rel="${root_rel%"${root_rel##*[![:space:]]}"}"
+        root_rel="${root_rel%/}"
+        [ -n "$root_rel" ] && [ "$root_rel" != "." ] || continue
+
+        nested="$clone_root/$root_rel"
+        [ "$nested" = "$dir" ] && continue
+        case "$nested" in
+            "$dir"/*)
+                if [ ${#prune_expr[@]} -gt 0 ]; then
+                    prune_expr+=(-o)
+                fi
+                prune_expr+=(-path "$nested")
+                ;;
+        esac
+    done
+
+    if [ ${#prune_expr[@]} -eq 0 ]; then
+        find "$dir" -mindepth 1 -type f -iname "*postman_collection*" -print -quit 2>/dev/null | grep -q .
+        return $?
+    fi
+
+    find "$dir" -mindepth 1 \( "${prune_expr[@]}" \) -prune -o -type f -iname "*postman_collection*" -print -quit 2>/dev/null | grep -q .
+}
+
 _has_repo_markers() {
     local dir="$1"
+    local clone_root="${2:-$dir}"
 
     [ -d "$dir/app" ] && return 0
     [ -d "$dir/tests" ] && return 0
-    find "$dir" -mindepth 1 -type f -iname "*postman_collection*" -print -quit 2>/dev/null | grep -q . && return 0
+    _has_postman_collection "$dir" "$clone_root" && return 0
     [ -d "$dir/collections" ] && return 0
     return 1
 }
@@ -117,7 +153,7 @@ _resolve_project_dir() {
             continue
         fi
 
-        if ! _has_repo_markers "$candidate"; then
+        if ! _has_repo_markers "$candidate" "$tmp_dir"; then
             continue
         fi
 
