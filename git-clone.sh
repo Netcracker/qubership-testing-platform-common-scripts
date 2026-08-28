@@ -215,9 +215,7 @@ _finalize_clone() {
 
 _clear_git_insteadOf() {
     if [ -n "${_GIT_INSTEADOF_KEY:-}" ]; then
-        if [ -n "${TMP_DIR:-}" ] && [ -d "${TMP_DIR}/.git" ]; then
-            git -C "$TMP_DIR" config --local --unset-all "$_GIT_INSTEADOF_KEY" 2>/dev/null || true
-        fi
+        git config --global --unset-all "$_GIT_INSTEADOF_KEY" 2>/dev/null || true
         unset _GIT_INSTEADOF_KEY
     fi
 }
@@ -325,17 +323,19 @@ clone_repository() {
         else
             echo "🔧 Configuring credential substitution for submodule authentication..."
 
+            # OpenShift arbitrary UID has no passwd entry; HOME is often "/" and not writable.
+            export HOME="${HOME_EX:-/app}"
             local git_host
             git_host=$(echo "$ATP_TESTS_GIT_REPO_URL" | sed 's|^https://||; s|/.*||')
             _GIT_INSTEADOF_KEY="url.https://oauth2:${ATP_TESTS_GIT_TOKEN}@${git_host}/.insteadOf"
-            if ! git -C "$TMP_DIR" config --local "$_GIT_INSTEADOF_KEY" "https://${git_host}/"; then
+            if ! git config --global "$_GIT_INSTEADOF_KEY" "https://${git_host}/"; then
                 echo "❌ ERROR: Failed to configure Git credential substitution for submodules."
-                echo "   Cannot write Git config under $TMP_DIR (HOME=${HOME:-unset})."
+                echo "   Cannot write $HOME/.gitconfig (HOME=$HOME)."
                 return 1
             fi
 
             echo "📥 Initializing submodules (depth=1)..."
-            GIT_TERMINAL_PROMPT=0 git -C "$TMP_DIR" submodule update --init --recursive --depth 1 2>"$git_err_path"
+            git submodule update --init --recursive --depth 1 2>"$git_err_path"
             submodule_exit=$?
             if [ "$submodule_exit" -ne 0 ]; then
                 _report_git_fetch_error "$submodule_exit" "$git_err_path" "initializing submodules"
