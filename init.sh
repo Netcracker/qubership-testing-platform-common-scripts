@@ -39,5 +39,11 @@ init_environment() {
     export TMP_DIR="/tmp/clone"
     mkdir -p "$TMP_DIR"
 
+    # OpenShift restricted-v2 runs as an arbitrary UID with no passwd entry.
+    # Git/npm write under HOME; "/" is not writable, so pin a group-writable path.
+    if [ -z "${HOME:-}" ] || [ ! -w "${HOME}" ]; then
+        export HOME="${HOME_EX:-/app}"
+    fi
+
     echo "✅ Environment initialized successfully"
 }
