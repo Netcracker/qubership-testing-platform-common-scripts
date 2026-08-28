@@ -62,9 +62,9 @@ upload_file_to_s3() {
     
     # Use background credentials for upload
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl cp "$FILE_PATH" "$DEST_PATH" > /dev/null 2>&1
+        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl cp "$FILE_PATH" "$DEST_PATH" > /dev/null
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$FILE_PATH" "$DEST_PATH" > /dev/null 2>&1
+        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$FILE_PATH" "$DEST_PATH" > /dev/null
     fi
 }
 
@@ -99,9 +99,9 @@ sync_directory_to_s3() {
     
     # Use background credentials for sync
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null 2>&1
+        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null 2>&1
+        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null
     fi
 }
 
@@ -119,25 +119,29 @@ finalize_upload() {
 
     # Final sync to ensure all files are captured
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null 2>&1
-        s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null 2>&1
-        s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null 2>&1
+        s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null
+        s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null
+        s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null 2>&1
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null 2>&1
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null 2>&1
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null
     fi
 
     # Upload marker file
     echo "${ENABLE_JIRA_INTEGRATION:-false}" > $TMP_DIR/allure-results.uploaded
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        s5cmd --no-verify-ssl cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null 2>&1
+        s5cmd --no-verify-ssl cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null 2>&1
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null
     fi
 
     # Generate result URLs
     generate_result_urls
+
+    # Drop bulky local artifacts so Completed Job pods (TTL up to 12h) do not
+    # keep clone traces/Allure data on the node after S3 already has a copy.
+    # release_ephemeral_disk
 
     # Final cleanup
     final_cleanup
@@ -191,4 +195,23 @@ final_cleanup() {
     unset _LOCAL_S3_SECRET
     unset _BACKGROUND_S3_KEY
     unset _BACKGROUND_S3_SECRET
+}
+
+# Remove generated run data from local disk. Leaves cloned sources in place
+# (e2e mounts the fixture at $TMP_DIR; wiping the whole tree would delete it).
+release_ephemeral_disk() {
+    local project_dir="${PROJECT_DIR:-$TMP_DIR}"
+    echo "🧹 Releasing local ephemeral disk under $TMP_DIR..."
+    rm -rf \
+        "${TMP_DIR}/allure-results" \
+        "${TMP_DIR}/attachments" \
+        "${TMP_DIR}/playwright-report" \
+        "${TMP_DIR}/test-execution.log" \
+        "${TMP_DIR}/playwright-test-list.json"
+    if [ -n "${project_dir}" ] && [ "${project_dir}" != "${TMP_DIR}" ]; then
+        rm -rf "${project_dir}/playwright-report" "${project_dir}/allure-results"
+    fi
+    # Drop image-deps link/copy; tests are finished and results already uploaded.
+    rm -rf "${project_dir}/node_modules"
+    echo "✅ Local ephemeral disk released"
 } 
