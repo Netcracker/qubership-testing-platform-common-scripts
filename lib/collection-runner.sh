@@ -207,16 +207,17 @@ run_collection_body() {
     echo "❌ Collection not found: $collection_path or $collection_path_in_collections — skipping"
     write_allure_placeholder \
       "skipped" \
-      "Collection: $(basename "$collection_dir")" \
+      "Collection: $(bruno_collection_display_name "$collection_dir")" \
       "Collection directory not found: $collection_path or $collection_path_in_collections" \
       ""
     return 0
   fi
 
-  local collection_name
-  collection_name=$(basename "$collection_dir")
-  local bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
-  local raw_log_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}.raw.log"
+  local collection_name collection_file_slug
+  collection_name=$(bruno_collection_display_name "$collection_dir")
+  collection_file_slug=$(bruno_collection_file_slug "$collection_dir")
+  local bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_file_slug}-result.json"
+  local raw_log_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_file_slug}.raw.log"
 
   local collection_start_ts
   collection_start_ts=$(date +%s)

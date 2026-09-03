@@ -61,7 +61,8 @@ run_bruno_from_test_params() {
   } > "$PATH_TO_ALLURE_RESULTS/environment.properties"
 
   # Export everything the subprocess needs (arrays can't cross fork; serialise folders).
-  export -f run_collection_body resolve_folders run_bru write_allure_placeholder wait_for_collection_slot
+  export -f run_collection_body resolve_folders run_bru write_allure_placeholder wait_for_collection_slot \
+    bruno_collection_display_name bruno_collection_file_slug
 
   export TMP_DIR PROJECT_DIR PATH_TO_ATTACHMENTS_DIR PATH_TO_ALLURE_RESULTS
   export BRU_BIN BRUNO_ENV_STR BRUNO_FLAGS_CLI BRUNO_GLOBAL_ENV BRUNO_WORKSPACE_PATH BRUNO_TAGS_CLI
@@ -95,7 +96,7 @@ run_bruno_from_test_params() {
   for collection in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
     collection_index=$((collection_index + 1))
     local cname
-    cname=$(basename "$collection")
+    cname=$(bruno_collection_file_slug "$collection")
     local prefix="[${cname}|${collection_index}/${total}]"
     bash -c 'run_collection_body "$1"' _ "$collection" > >(sed "s#^#${prefix} #") 2>&1 &
     active_collection_pids+=("$!")

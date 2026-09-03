@@ -46,7 +46,7 @@ discover_bruno_collections() {
 
     echo "🔍 Discovering Bruno collections in 'collections' directory"
     mapfile -t discovered < <(
-        find collections -mindepth 2 -maxdepth 2 -type f -name "collection.bru" \
+        find collections -mindepth 2 -type f -name "collection.bru" \
             ! -path "*/.git/*" \
             ! -path "*/node_modules/*" \
             -exec dirname {} \; | sort -u
@@ -59,6 +59,20 @@ discover_bruno_collections() {
     eval "$output_var_name=(${q# })"
 }
 
+# Path relative to collections/ for display and Allure suite.
+# Explicit names without a collections/ prefix are unchanged.
+bruno_collection_display_name() {
+    local dir="${1#./}"
+    dir="${dir#collections/}"
+    printf '%s' "$dir"
+}
+
+# Filesystem-safe slug: display name with '/' replaced by '_'.
+bruno_collection_file_slug() {
+    local name
+    name=$(bruno_collection_display_name "$1")
+    printf '%s' "${name//\//_}"
+}
 
 # Extract Bruno folders from string separated by '|' and convert them to an array
 # Args:
