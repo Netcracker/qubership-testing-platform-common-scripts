@@ -5,6 +5,7 @@
 # before spawning subprocesses):
 #   resolve_folders      — resolves folder names to relative paths inside a collection
 #   run_bru              — runs bru.js with timeout; appends optional folder args
+#                          and --tags when BRUNO_TAGS_CLI is set
 #   write_allure_placeholder — writes a synthetic skipped/broken Allure result JSON
 #   wait_for_collection_slot — semaphore: blocks until one active PID slot is free
 #   run_collection_body  — top-level per-collection entry point (called by dispatcher)
@@ -58,7 +59,7 @@ resolve_folders() {
 #
 # Globals read:  BRU_BIN, COLLECTION_TIMEOUT, BRUNO_FLAGS_CLI,
 #                BRUNO_ENV_STR, BRUNO_GLOBAL_ENV, BRUNO_WORKSPACE_PATH,
-#                TMP_DIR
+#                BRUNO_TAGS_CLI, TMP_DIR
 # Returns:       exit code from bru.js (propagated through the pipe via PIPESTATUS)
 # ---------------------------------------------------------------------------
 run_bru() {
@@ -82,6 +83,12 @@ run_bru() {
     local global_env_flags=""
   fi
 
+  if [ -n "${BRUNO_TAGS_CLI}" ]; then
+    local tags_flag="--tags ${BRUNO_TAGS_CLI}"
+  else
+    local tags_flag=""
+  fi
+
   # shellcheck disable=SC2086
   timeout -s TERM -k 30 \
     "${COLLECTION_TIMEOUT:-3600}s" \
@@ -89,6 +96,7 @@ run_bru() {
     ${BRUNO_FLAGS_CLI:-"--insecure"} \
     ${env_flag} \
     ${global_env_flags} \
+    ${tags_flag} \
     --reporter-json "${report_path}" \
     "$@" \
     2>&1 | tee "${log_path}"
@@ -179,7 +187,7 @@ wait_for_collection_slot() {
 # Globals read:  PROJECT_DIR, PATH_TO_ATTACHMENTS_DIR, PATH_TO_ALLURE_RESULTS,
 #                BRUNO_FOLDERS_STR, BRU_BIN, BRUNO_ENV_STR, BRUNO_GLOBAL_ENV,
 #                BRUNO_WORKSPACE_PATH, BRUNO_ENV_VARS_CLI, BRUNO_FLAGS_CLI,
-#                COLLECTION_TIMEOUT
+#                BRUNO_TAGS_CLI, COLLECTION_TIMEOUT
 # ---------------------------------------------------------------------------
 run_collection_body() {
   local collection_dir="$1"
@@ -221,6 +229,10 @@ run_collection_body() {
   resolve_folders BRUNO_FOLDERS_ARRAY
 
   local run_ok=true
+
+  if [ -n "${BRUNO_TAGS_CLI}" ]; then
+    echo "🏷️ Tag filter: ${BRUNO_TAGS_CLI}"
+  fi
 
   if [ "${#BRUNO_FOLDERS_ARRAY[@]}" -eq 0 ]; then
     # Full-collection mode

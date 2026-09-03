@@ -91,3 +91,43 @@ extract_bruno_folders() {
     done
     echo -e "$output_message"
 }
+
+# Extract Bruno tags from a pipe-separated string (EXTRA_VARS splits on comma,
+# so '|' is used the same way as BRUNO_FOLDERS). The CLI value is comma-joined
+# because `bru run --tags` expects a comma-separated list.
+# Args:
+#   $1 - Input string (e.g. "smoke|sanity")
+#   $2 - Name of the output variable to store the comma-separated tag string
+# ============================================
+extract_bruno_tags() {
+    local input="$1"
+    local output_var_name="$2"
+    local result_array=()
+
+    if [[ -n "$input" ]]; then
+        IFS='|' read -ra result_array <<< "$input"
+        local cleaned=()
+        local tag
+        for tag in "${result_array[@]}"; do
+            tag=$(echo "$tag" | xargs)
+            if [[ -n "$tag" ]]; then
+                cleaned+=("$tag")
+            fi
+        done
+        result_array=("${cleaned[@]}")
+    fi
+
+    local joined=""
+    if [[ ${#result_array[@]} -gt 0 ]]; then
+        local IFS=','
+        joined="${result_array[*]}"
+    fi
+
+    eval "$output_var_name=\"$joined\""
+
+    if [[ -n "$joined" ]]; then
+        echo "➡️ Bruno tags filter: ${joined}"
+    else
+        echo "➡️ Bruno tags filter: (none)"
+    fi
+}
