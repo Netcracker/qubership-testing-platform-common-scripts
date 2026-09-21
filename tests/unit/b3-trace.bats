@@ -1,5 +1,10 @@
 #!/usr/bin/env bats
 # Unit tests for tools/b3_trace.sh — B3 trace/span id generation
+#
+# Each @test runs in its own subshell (bats' own isolation, not a bug), so a PROJECT_ID/RUN_ID
+# an earlier test exports is never visible to a later one. shellcheck flags that as SC2030/SC2031
+# without knowing it's the intended behavior here.
+# shellcheck disable=SC2030,SC2031
 
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../.." && pwd)"
 

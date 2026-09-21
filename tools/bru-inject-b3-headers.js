@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global require, process, console */
 // bru-inject-b3-headers.js — idempotently adds a collection-level pre-request
 // script that stamps every request with B3 trace/span headers.
 //
