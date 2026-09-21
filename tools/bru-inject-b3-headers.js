@@ -9,7 +9,10 @@
 // inside the temporary clone (never the user's source repository). The
 // injected script reads the trace id from the X_B3_TRACE_ID runtime variable
 // (set per collection run via `bru run --env-var`, see collection-runner.sh)
-// and generates a fresh span id per request with Bruno's built-in `crypto`.
+// and generates a fresh span id per request with Math.random() — bru run's
+// default "safe" sandbox executes pre-request scripts in QuickJS, which has
+// no require('crypto'); a span id is a correlation id, not a security token,
+// so Math.random() is an adequate source here.
 
 const fs = require('fs');
 const path = require('path');
@@ -21,9 +24,9 @@ const SNIPPET = `// ${MARKER} — auto-injected, do not edit by hand
 (() => {
   const traceId = bru.getEnvVar('X_B3_TRACE_ID');
   if (!traceId) { return; }
-  const crypto = require('crypto');
+  const spanId = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
   req.setHeader('X-B3-TraceId', traceId);
-  req.setHeader('X-B3-SpanId', crypto.randomBytes(8).toString('hex'));
+  req.setHeader('X-B3-SpanId', spanId);
   req.setHeader('X-B3-Sampled', '1');
 })();`;
 
