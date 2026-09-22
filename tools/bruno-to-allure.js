@@ -1,27 +1,65 @@
 #!/usr/bin/env node
-/* global require, process, __dirname, console */
+/* global require, process, module, __dirname, console */
 
 const fs = require("fs");
 const path = require("path");
 const { randomUUID } = require("node:crypto");
 const { URL } = require("node:url");
 
-const args = process.argv.slice(2);
-const brunoReportPath = args[0];
-const allureResultsDir = args[1] || path.join(__dirname, "allure-results");
-const collectionName = args[2] || "unknown-collection";
-
-// ensure dir
-if (!fs.existsSync(allureResultsDir)) fs.mkdirSync(allureResultsDir, { recursive: true });
-
-// split Bruno "path" into folder parts (preserve every level)
 function splitPathParts(requestPath) {
   if (!requestPath) return ["uncategorized"];
   return requestPath.replace(/\/+|\\+/g, "/").split("/").map(p => p.trim()).filter(Boolean);
 }
 
-// Create steps: Request/Response + Assertion steps
-function createSteps(test, id) {
+function normalizeBrunoPath(test) {
+  return String(test.path || test.filename || test.file || test.name || "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "");
+}
+
+function isEnvironmentOrMetaFile(test) {
+  const bruPath = normalizeBrunoPath(test);
+  const parts = splitPathParts(bruPath);
+  if (parts.some(part => part.toLowerCase() === "environments")) {
+    return true;
+  }
+  const last = (parts[parts.length - 1] || "").toLowerCase();
+  if (last === "collection.bru" || last === "folder.bru") {
+    return true;
+  }
+  const name = String(test.name || "").toLowerCase();
+  return name === "collection.bru" || name === "folder.bru" || name === "collection";
+}
+
+function parseBrunoResults(brunoReport) {
+  if (Array.isArray(brunoReport)) {
+    if (brunoReport.every(item => item && Array.isArray(item.results))) {
+      return brunoReport.flatMap(item => item.results);
+    }
+    return brunoReport;
+  }
+  if (brunoReport && Array.isArray(brunoReport.results)) {
+    return brunoReport.results;
+  }
+  throw new Error("Invalid Bruno report format");
+}
+
+function mapBrunoStatus(test, assertionsFailed) {
+  const raw = String(test.status || "").toLowerCase();
+  const responseStatus = String(test.response?.status ?? "").toLowerCase();
+  if (raw === "skip" || raw === "skipped" || responseStatus === "skipped") {
+    return "skipped";
+  }
+  if (assertionsFailed) {
+    return "failed";
+  }
+  if (raw === "pass" || raw === "passed") {
+    return "passed";
+  }
+  return "failed";
+}
+
+function createSteps(test, id, allureResultsDir) {
   const requestFilename = `${id}-request.json`;
   const requestHeadersFilename = `${id}-request-headers.json`;
   const responseFilename = `${id}-response.json`;
@@ -46,7 +84,6 @@ function createSteps(test, id) {
 
   const steps = [];
 
-    // --- Assertions ---
   const allAssertions = [
     ...(test.preRequestTestResults || []),
     ...(test.testResults || []),
@@ -69,14 +106,13 @@ function createSteps(test, id) {
         status: isFail ? "failed" : "passed",
         stage: "finished",
         statusDetails: isFail ? {
-              message: ar.description || "Assertion failed",
-              trace: ar.error || "No description"
-        }: undefined
+          message: ar.description || "Assertion failed",
+          trace: ar.error || "No description"
+        } : undefined
       });
     }
   }
 
-  // Request Headers step
   steps.push({
     name: "Request Headers",
     status: "passed",
@@ -85,7 +121,6 @@ function createSteps(test, id) {
     parameters: Object.entries(requestHeaders).map(([k, v]) => ({ name: k, value: String(v) }))
   });
 
-  // Request Body step
   steps.push({
     name: "Request Body",
     status: "passed",
@@ -93,7 +128,6 @@ function createSteps(test, id) {
     attachments: [{ name: "Request Body", source: requestFilename, type: "application/json" }]
   });
 
-  // Response Headers step
   steps.push({
     name: "Response Headers",
     status: "passed",
@@ -102,7 +136,6 @@ function createSteps(test, id) {
     parameters: Object.entries(responseHeaders).map(([k, v]) => ({ name: k, value: String(v) }))
   });
 
-  // Response Body step
   steps.push({
     name: "Response Body",
     status: assertionsFailed ? "failed" : "passed",
@@ -113,21 +146,18 @@ function createSteps(test, id) {
   return { steps, assertionsFailed, failedAssertions };
 }
 
-try {
+function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
+  if (!fs.existsSync(allureResultsDir)) {
+    fs.mkdirSync(allureResultsDir, { recursive: true });
+  }
+
   const raw = fs.readFileSync(brunoReportPath, "utf8");
   const brunoReport = JSON.parse(raw);
-  let results = [];
+  const results = parseBrunoResults(brunoReport).filter(test => !isEnvironmentOrMetaFile(test));
 
-  if (Array.isArray(brunoReport)) {
-    if (brunoReport.every(item => item && Array.isArray(item.results))) {
-      results = brunoReport.flatMap(item => item.results);
-    } else {
-      results = brunoReport;
-    }
-  } else if (brunoReport && Array.isArray(brunoReport.results)) {
-    results = brunoReport.results;
-  } else {
-    throw new Error("Invalid Bruno report format");
+  if (results.length === 0) {
+    console.log(`ℹ️ No reportable Bruno requests in ${collectionName} — skipping Allure conversion`);
+    return 0;
   }
 
   const children = [];
@@ -137,18 +167,13 @@ try {
     const duration = test.response?.responseTime ?? test.duration ?? 0;
 
     const parts = splitPathParts(test.path);
-
     const parentSuite = "Backend (Bruno)";
     const suite = collectionName;
     const subSuite = parts.length > 1 ? parts.slice(0, -1).join(" / ") : undefined;
     const packageName = `${collectionName}.${parts.join(".")}`;
 
-    const { steps, assertionsFailed, failedAssertions } = createSteps(test, id, timestamp, duration);
-
-    const initialStatus =
-      test.status === "pass" ? "passed" : "failed";
-
-    const finalStatus = assertionsFailed ? "failed" : initialStatus;
+    const { steps, assertionsFailed, failedAssertions } = createSteps(test, id, allureResultsDir);
+    const finalStatus = mapBrunoStatus(test, assertionsFailed);
 
     const allureResult = {
       uuid: id,
@@ -158,7 +183,7 @@ try {
       status: finalStatus,
       statusDetails: finalStatus === "failed" ? {
         message: failedAssertions?.map(r =>
-          `${r.description || "Test"}: ${r.error || ''}`
+          `${r.description || "Test"}: ${r.error || ""}`
         ).join("\n") || "Test failed",
         trace: failedAssertions?.map(r =>
           `Status: ${r.status || "Failed"}\nDescription: ${r.description || "No description"}\nError: ${r.error || "No details"}\nActual: ${r.actual}\nExpected: ${r.expected}`
@@ -177,7 +202,7 @@ try {
         { name: "suite", value: suite },
         ...(subSuite ? [{ name: "subSuite", value: subSuite }] : []),
         { name: "package", value: packageName },
-        { name: "host", value: (() => { try { return new URL(test.request?.url).host } catch { return "n/a"; } })() },
+        { name: "host", value: (() => { try { return new URL(test.request?.url).host; } catch { return "n/a"; } })() },
         { name: "framework", value: "bruno" },
         { name: "language", value: "javascript" },
         { name: "user", value: process.env.TRIGGER_AUTHOR || "runner" }
@@ -215,8 +240,30 @@ try {
   );
 
   console.log(`✅ Successfully converted Bruno report to Allure format. Results saved in: ${allureResultsDir}`);
-} catch (error) {
-  console.error(`❌ Error processing Bruno report: ${error.message}`);
-  process.exit(1);
+  return children.length;
 }
 
+function main() {
+  const args = process.argv.slice(2);
+  const brunoReportPath = args[0];
+  const allureResultsDir = args[1] || path.join(__dirname, "allure-results");
+  const collectionName = args[2] || "unknown-collection";
+
+  try {
+    convertBrunoReport(brunoReportPath, allureResultsDir, collectionName);
+  } catch (error) {
+    console.error(`❌ Error processing Bruno report: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  convertBrunoReport,
+  isEnvironmentOrMetaFile,
+  mapBrunoStatus,
+  parseBrunoResults
+};

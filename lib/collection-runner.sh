@@ -4,7 +4,9 @@
 # Exported functions (must be exported with `export -f` by the dispatcher
 # before spawning subprocesses):
 #   resolve_folders      — resolves folder names to relative paths inside a collection
+#   list_bru_run_targets — request files in this collection, excluding nested collections
 #   run_bru              — runs bru.js with timeout; appends optional folder args
+#                          and --tags when BRUNO_TAGS_CLI is set
 #   write_allure_placeholder — writes a synthetic skipped/broken Allure result JSON
 #   wait_for_collection_slot — semaphore: blocks until one active PID slot is free
 #   run_collection_body  — top-level per-collection entry point (called by dispatcher)
@@ -46,6 +48,59 @@ resolve_folders() {
 }
 
 # ---------------------------------------------------------------------------
+# list_bru_run_targets
+#
+# If this collection contains nested collections (subdirs with collection.bru),
+# populate BRU_RUN_TARGETS with this collection's own request files so bru
+# does not recurse into nested collections (and their environments/).
+# If there are no nested collections, BRU_RUN_TARGETS is empty and the caller
+# should run the full collection (no extra bru path args).
+#
+# Globals set:   BRU_RUN_TARGETS, NESTED_COLLECTION_DIRS
+# ---------------------------------------------------------------------------
+list_bru_run_targets() {
+  BRU_RUN_TARGETS=()
+  NESTED_COLLECTION_DIRS=()
+  local dir f
+
+  while IFS= read -r dir; do
+    NESTED_COLLECTION_DIRS+=("$dir")
+  done < <(find . -mindepth 2 -type f -name "collection.bru" \
+             ! -path "*/.git/*" \
+             ! -path "*/node_modules/*" \
+             -exec dirname {} \; | sort -u)
+
+  if [ "${#NESTED_COLLECTION_DIRS[@]}" -eq 0 ]; then
+    return 0
+  fi
+
+  echo "ℹ️ Nested collections excluded from this run:"
+  printf "  %s\n" "${NESTED_COLLECTION_DIRS[@]}"
+
+  while IFS= read -r f; do
+    local skip=false
+    local nested
+    for nested in "${NESTED_COLLECTION_DIRS[@]}"; do
+      case "$f" in
+        "$nested"|"$nested"/*) skip=true; break ;;
+      esac
+    done
+    if [ "$skip" = true ]; then
+      continue
+    fi
+    BRU_RUN_TARGETS+=("$f")
+  done < <(find . -type f -name "*.bru" \
+             ! -name "collection.bru" \
+             ! -name "folder.bru" \
+             ! -path "*/environments/*" \
+             ! -path "*/.git/*" \
+             ! -path "*/node_modules/*" \
+             | sort)
+
+  echo "ℹ️ Request files in this collection: ${#BRU_RUN_TARGETS[@]}"
+}
+
+# ---------------------------------------------------------------------------
 # run_bru REPORT_PATH LOG_PATH [FOLDER...]
 #
 # Runs bru.js with a timeout, streaming output to tee. Optional trailing
@@ -58,7 +113,7 @@ resolve_folders() {
 #
 # Globals read:  BRU_BIN, COLLECTION_TIMEOUT, BRUNO_FLAGS_CLI,
 #                BRUNO_ENV_STR, BRUNO_GLOBAL_ENV, BRUNO_WORKSPACE_PATH,
-#                TMP_DIR
+#                BRUNO_TAGS_CLI, TMP_DIR
 # Returns:       exit code from bru.js (propagated through the pipe via PIPESTATUS)
 # ---------------------------------------------------------------------------
 run_bru() {
@@ -82,6 +137,12 @@ run_bru() {
     local global_env_flags=""
   fi
 
+  if [ -n "${BRUNO_TAGS_CLI}" ]; then
+    local tags_flag="--tags ${BRUNO_TAGS_CLI}"
+  else
+    local tags_flag=""
+  fi
+
   # shellcheck disable=SC2086
   timeout -s TERM -k 30 \
     "${COLLECTION_TIMEOUT:-3600}s" \
@@ -89,6 +150,7 @@ run_bru() {
     ${BRUNO_FLAGS_CLI:-"--insecure"} \
     ${env_flag} \
     ${global_env_flags} \
+    ${tags_flag} \
     --reporter-json "${report_path}" \
     "$@" \
     2>&1 | tee "${log_path}"
@@ -179,7 +241,7 @@ wait_for_collection_slot() {
 # Globals read:  PROJECT_DIR, PATH_TO_ATTACHMENTS_DIR, PATH_TO_ALLURE_RESULTS,
 #                BRUNO_FOLDERS_STR, BRU_BIN, BRUNO_ENV_STR, BRUNO_GLOBAL_ENV,
 #                BRUNO_WORKSPACE_PATH, BRUNO_ENV_VARS_CLI, BRUNO_FLAGS_CLI,
-#                COLLECTION_TIMEOUT
+#                BRUNO_TAGS_CLI, COLLECTION_TIMEOUT
 # ---------------------------------------------------------------------------
 run_collection_body() {
   local collection_dir="$1"
@@ -199,16 +261,17 @@ run_collection_body() {
     echo "❌ Collection not found: $collection_path or $collection_path_in_collections — skipping"
     write_allure_placeholder \
       "skipped" \
-      "Collection: $(basename "$collection_dir")" \
+      "Collection: $(bruno_collection_display_name "$collection_dir")" \
       "Collection directory not found: $collection_path or $collection_path_in_collections" \
       ""
     return 0
   fi
 
-  local collection_name
-  collection_name=$(basename "$collection_dir")
-  local bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}-result.json"
-  local raw_log_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_name}.raw.log"
+  local collection_name collection_file_slug
+  collection_name=$(bruno_collection_display_name "$collection_dir")
+  collection_file_slug=$(bruno_collection_file_slug "$collection_dir")
+  local bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_file_slug}-result.json"
+  local raw_log_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_file_slug}.raw.log"
 
   local collection_start_ts
   collection_start_ts=$(date +%s)
@@ -221,24 +284,42 @@ run_collection_body() {
   resolve_folders BRUNO_FOLDERS_ARRAY
 
   local run_ok=true
+  local skipped_empty=false
+
+  if [ -n "${BRUNO_TAGS_CLI}" ]; then
+    echo "🏷️ Tag filter: ${BRUNO_TAGS_CLI}"
+  fi
 
   if [ "${#BRUNO_FOLDERS_ARRAY[@]}" -eq 0 ]; then
-    # Full-collection mode
-    echo "🔍 Running full collection"
-    echo "🚀 BRUNO RUN START collection=${collection_name} pid=$$ mode=full time=$(date '+%H:%M:%S')"
+    # Full-collection mode. Nested collections are discovered separately, so
+    # exclude their trees.
+    list_bru_run_targets
 
-    if ! run_bru "$bruno_report_path" "$raw_log_path"; then
-      echo "❌ FAILED: ${collection_name} rc=$?"
-      echo "----- LAST 200 LINES: ${collection_name} -----"
-      tail -n 200 "${raw_log_path}" || true
-      echo "--------------------------------------------"
-      touch "${TMP_DIR}/.collection_failed"
-      run_ok=false
+    if [ "${#NESTED_COLLECTION_DIRS[@]}" -gt 0 ] && [ "${#BRU_RUN_TARGETS[@]}" -eq 0 ]; then
+      echo "ℹ️ No request files in this collection (nested collections run separately) — skipping"
+      skipped_empty=true
     else
-      echo "✅ SUCCESS: ${collection_name}"
-    fi
+      echo "🔍 Running full collection"
+      echo "🚀 BRUNO RUN START collection=${collection_name} pid=$$ mode=full time=$(date '+%H:%M:%S')"
 
-    echo "🏁 BRUNO RUN END collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
+      local -a bru_args=()
+      if [ "${#BRU_RUN_TARGETS[@]}" -gt 0 ]; then
+        bru_args=("${BRU_RUN_TARGETS[@]}")
+      fi
+
+      if ! run_bru "$bruno_report_path" "$raw_log_path" "${bru_args[@]}"; then
+        echo "❌ FAILED: ${collection_name} rc=$?"
+        echo "----- LAST 200 LINES: ${collection_name} -----"
+        tail -n 200 "${raw_log_path}" || true
+        echo "--------------------------------------------"
+        touch "${TMP_DIR}/.collection_failed"
+        run_ok=false
+      else
+        echo "✅ SUCCESS: ${collection_name}"
+      fi
+
+      echo "🏁 BRUNO RUN END collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
+    fi
 
   elif [ "${#RESOLVED_FOLDERS[@]}" -eq 0 ]; then
     # Folder-filter requested but nothing matched — skip with a placeholder
@@ -280,21 +361,40 @@ run_collection_body() {
   echo "🏁 FINISHED collection=${collection_name} pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
 
   # Convert report or write a broken placeholder
-  if [ -f "$bruno_report_path" ]; then
+  if [ "$skipped_empty" = true ]; then
+    echo "ℹ️ ${collection_name} -> 0 tests (no own requests)"
+    printf "%s,%s\n" "${collection_name}" "0" >> "${TMP_DIR}/tests_count.csv"
+    echo "🏁 COLLECTION FULLY FINISHED collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
+  elif [ -f "$bruno_report_path" ]; then
     echo "🔍 Parsing report: ${bruno_report_path}"
     local count
-    count=$(jq 'if type=="array"
-                then (if (.[0]?|type)=="object" and (.[0]?|has("results"))
-                      then ([.[].results[]]|length)
-                      else length end)
-                elif type=="object" and has("results") then (.results|length)
-                else 0 end' "$bruno_report_path")
+    count=$(jq '
+      def is_reportable:
+        ((.path // .filename // .file // .name // "") | gsub("\\\\"; "/") | ascii_downcase) as $p
+        | ((.name // "") | ascii_downcase) as $n
+        | ($p | split("/") | index("environments") | not)
+          and ($p | test("(^|/)collection\\.bru$") | not)
+          and ($n != "collection.bru")
+          and ($n != "folder.bru")
+          and ($n != "collection");
+      def results:
+        if type=="array" then
+          if (.[0]?|type)=="object" and (.[0]?|has("results")) then [.[].results[]]
+          else . end
+        elif type=="object" and has("results") then .results
+        else [] end;
+      [results[] | select(is_reportable)] | length
+    ' "$bruno_report_path")
     echo "✅ ${collection_name} -> ${count} tests"
     printf "%s,%s\n" "${collection_name}" "${count}" >> "${TMP_DIR}/tests_count.csv"
-    node /scripts/tools/bruno-to-allure.js \
-      "$bruno_report_path" \
-      "$PATH_TO_ALLURE_RESULTS" \
-      "$collection_name"
+    if [ "$count" -eq 0 ]; then
+      echo "ℹ️ No tests in Bruno report — skipping Allure conversion for ${collection_name}"
+    else
+      node /scripts/tools/bruno-to-allure.js \
+        "$bruno_report_path" \
+        "$PATH_TO_ALLURE_RESULTS" \
+        "$collection_name"
+    fi
     echo "🏁 COLLECTION FULLY FINISHED collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
   else
     echo "❌ Bruno report missing — writing broken result to Allure"
