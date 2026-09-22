@@ -9,6 +9,8 @@
 source /scripts/lib/collection-runner.sh
 # shellcheck disable=SC1091
 source /scripts/tools/bru_tools.sh
+# shellcheck disable=SC1091
+source /scripts/tools/b3_trace.sh
 
 run_bruno_from_test_params() {
   echo "🚀 Bruno execution started"
@@ -60,9 +62,11 @@ run_bruno_from_test_params() {
 
   # Export everything the subprocess needs (arrays can't cross fork; serialise folders).
   export -f run_collection_body resolve_folders run_bru write_allure_placeholder wait_for_collection_slot
+  export -f compose_b3_trace_id generate_b3_testcase_id generate_b3_span_id _b3_random_hex
 
   export TMP_DIR PROJECT_DIR PATH_TO_ATTACHMENTS_DIR PATH_TO_ALLURE_RESULTS
   export BRU_BIN BRUNO_ENV_STR BRUNO_FLAGS_CLI BRUNO_GLOBAL_ENV BRUNO_WORKSPACE_PATH
+  export PROJECT_ID RUN_ID
 
   if [ "${#BRUNO_FOLDERS_ARRAY[@]}" -gt 0 ]; then
     BRUNO_FOLDERS_STR=$(printf "%s\n" "${BRUNO_FOLDERS_ARRAY[@]}")
