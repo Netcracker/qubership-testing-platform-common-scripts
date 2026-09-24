@@ -62,9 +62,9 @@ upload_file_to_s3() {
     
     # Use background credentials for upload
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl cp "$FILE_PATH" "$DEST_PATH" > /dev/null 2>&1
+        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl cp "$FILE_PATH" "$DEST_PATH" > /dev/null
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$FILE_PATH" "$DEST_PATH" > /dev/null 2>&1
+        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$FILE_PATH" "$DEST_PATH" > /dev/null
     fi
 }
 
@@ -99,9 +99,9 @@ sync_directory_to_s3() {
     
     # Use background credentials for sync
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null 2>&1
+        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null 2>&1
+        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null
     fi
 }
 
@@ -119,22 +119,24 @@ finalize_upload() {
 
     # Final sync to ensure all files are captured
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null 2>&1
-        s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null 2>&1
-        s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null 2>&1
+        s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null
+        s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null
+        s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null 2>&1
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null 2>&1
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null 2>&1
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null
     fi
 
     # Upload marker file
     echo "${ENABLE_JIRA_INTEGRATION:-false}" > $TMP_DIR/allure-results.uploaded
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        s5cmd --no-verify-ssl cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null 2>&1
+        s5cmd --no-verify-ssl cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null 2>&1
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null
     fi
+
+    notify_allure_proc
 
     # Generate result URLs
     generate_result_urls
@@ -148,6 +150,51 @@ finalize_upload() {
     echo "Report view is available at: ${ATP_REPORT_VIEW_UI_URL}/${REPORTS_FOLDER_PATH}index.html"
     
     echo "✅ Upload finalization completed"
+}
+
+# Ask allure-proc to generate the report. /transform answers only after generation
+# finishes; a client timeout means the body was sent and work continues there.
+notify_allure_proc() {
+    if [[ -z "${ATP_ALLURE_PROC_HOST:-}" ]]; then
+        return 0
+    fi
+
+    local host="${ATP_ALLURE_PROC_HOST%/}"
+    local transform_url="${host}/transform"
+    local storage_key="${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results.uploaded"
+    local payload
+    payload=$(printf '{"EventName":"s3:ObjectCreated:Put","Key":"%s"}' "$storage_key")
+
+    echo "📡 Notifying allure-proc: ${transform_url}"
+
+    local attempt http_code curl_status
+    local max_attempts=3
+    for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+        http_code=""
+        curl_status=0
+        http_code=$(curl --silent --show-error --max-time 10 \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            --output /dev/null \
+            --write-out "%{http_code}" \
+            "$transform_url") || curl_status=$?
+
+        if [[ "$curl_status" -eq 0 && "$http_code" == "200" ]]; then
+            echo "✅ allure-proc transform completed"
+            return 0
+        fi
+        # Timeout means the body was sent; another POST would start a second run.
+        if [[ "$curl_status" -eq 28 ]]; then
+            echo "ℹ️ allure-proc still running after client timeout; generation continues"
+            return 0
+        fi
+
+        echo "⚠️ allure-proc notification failed (attempt ${attempt}/${max_attempts}, curl=${curl_status}, http=${http_code:-none})"
+        if [[ "$attempt" -lt "$max_attempts" ]]; then
+            sleep 2
+        fi
+    done
+    return 0
 }
 
 # Generate URLs for results

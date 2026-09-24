@@ -157,6 +157,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 - `CURRENT_TIME` - Override current time
 - `ATP_STORAGE_SERVER_URL` - MinIO API host
 - `ATP_STORAGE_SERVER_UI_URL` - S3 UI URL
+- `ATP_ALLURE_PROC_HOST` - Base URL of allure-proc. When set, POST `/transform` after `allure-results.uploaded` is uploaded. Empty or unset skips the call
 - `PAUSE_BEFORE_END` - Pause before container exit
 - `UPLOAD_METHOD` - Upload method: `cp` (file-based) or `sync` (directory-based, triggered by inotifywait)
 
