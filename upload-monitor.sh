@@ -169,10 +169,15 @@ notify_allure_proc() {
 
     local attempt http_code curl_status
     local max_attempts=3
+    local insecure_flag=()
+    if [[ "${ATP_ALLURE_PROC_INSECURE:-true}" == "true" ]]; then
+        insecure_flag=(--insecure)
+    fi
     for ((attempt = 1; attempt <= max_attempts; attempt++)); do
         http_code=""
         curl_status=0
         http_code=$(curl --silent --show-error --max-time 10 \
+            "${insecure_flag[@]}" \
             --header "Content-Type: application/json" \
             --data "$payload" \
             --output /dev/null \
