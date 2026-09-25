@@ -73,7 +73,9 @@ finalize_once() {
 
     push_metrics || true
     save_native_report "${PROJECT_DIR:-$TMP_DIR}/${NATIVE_REPORT_DIR:-playwright-report}" || true
-    finalize_upload || true
+    if ! finalize_upload; then
+      echo "❌ Upload/report finalization failed; see preceding storage or Allure errors."
+    fi
     sleep 15
 
     set -e

@@ -157,10 +157,29 @@ ENTRYPOINT ["/entrypoint.sh"]
 - `CURRENT_TIME` - Override current time
 - `ATP_STORAGE_SERVER_URL` - MinIO API host
 - `ATP_STORAGE_SERVER_UI_URL` - S3 UI URL
+- `ATP_ALLURE_REPORT_GENERATE_IN_RUNNER` - When `true`, generate and upload the Allure report in the runner; takes precedence over `ATP_ALLURE_PROC_HOST` and omits the completion marker
 - `ATP_ALLURE_PROC_HOST` - Base URL of allure-proc. When set, POST `/transform` after `allure-results.uploaded` is uploaded. Empty or unset skips the call
 - `ATP_ALLURE_PROC_INSECURE` - When `true` (the default), the allure-proc POST uses `curl --insecure`. Set `false` to verify the server certificate
+- `ENABLE_JIRA_INTEGRATION` - Run Jira updates after runner-side generation, or pass the setting to external allure-proc through the marker
+- `JIRA_BASE_URL`, `JIRA_USERNAME`, `JIRA_PASSWORD`, `JIRA_PROJECT_KEY` - Jira connection settings used only by runner-side generation
 - `PAUSE_BEFORE_END` - Pause before container exit
 - `UPLOAD_METHOD` - Upload method: `cp` (file-based) or `sync` (directory-based, triggered by inotifywait)
+
+### Allure finalization routing
+
+After the common results upload, finalization selects one mode:
+
+1. `ATP_ALLURE_REPORT_GENERATE_IN_RUNNER=true`: generate/style/upload the report
+   and viewer link locally, then optionally update Jira. No marker or
+   allure-proc request is emitted.
+2. Runner generation is disabled and `ATP_ALLURE_PROC_HOST` is set: upload the
+   marker and notify allure-proc.
+3. Runner generation is disabled and the host is empty: keep the upload-only
+   legacy path, including the marker, without a direct generation request.
+
+Disable storage notifications targeting allure-proc before enabling runner
+generation. Allure CLI runs in the test Job and therefore shares its CPU and
+memory limits.
 
 ## Benefits
 

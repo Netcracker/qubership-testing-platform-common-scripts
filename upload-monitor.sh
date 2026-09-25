@@ -55,17 +55,38 @@ start_inotify_uploader() {
     echo "📡 Inotify process started with PID: $INOTIFY_PID"
 }
 
+# Execute s5cmd with provider-specific options.
+s5cmd_storage() {
+    if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
+        s5cmd --no-verify-ssl "$@"
+    elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
+        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" "$@"
+    else
+        echo "ℹ️ Storage upload skipped for provider: ${ATP_STORAGE_PROVIDER:-none}"
+    fi
+}
+
+s3_upload_file() {
+    local source_file="$1"
+    local destination="$2"
+    s5cmd_storage cp "$source_file" "$destination" > /dev/null
+}
+
+s3_sync_directory() {
+    local source_dir="$1"
+    local destination="$2"
+    s5cmd_storage sync "$source_dir/" "$destination" > /dev/null
+}
+
 # Upload file to S3/MinIO
 upload_file_to_s3() {
     local FILE_PATH="$1"
     local DEST_PATH="$2"
     
     # Use background credentials for upload
-    if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl cp "$FILE_PATH" "$DEST_PATH" > /dev/null
-    elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$FILE_PATH" "$DEST_PATH" > /dev/null
-    fi
+    AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" \
+        AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" \
+        s3_upload_file "$FILE_PATH" "$DEST_PATH"
 }
 
 # Sync-based uploader function (triggered by inotifywait)
@@ -98,16 +119,15 @@ sync_directory_to_s3() {
     local DEST_PATH="$2"
     
     # Use background credentials for sync
-    if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null
-    elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$SOURCE_DIR/" "$DEST_PATH" > /dev/null
-    fi
+    AWS_ACCESS_KEY_ID="$_BACKGROUND_S3_KEY" \
+        AWS_SECRET_ACCESS_KEY="$_BACKGROUND_S3_SECRET" \
+        s3_sync_directory "$SOURCE_DIR" "$DEST_PATH"
 }
 
 # Finalize upload after tests
 finalize_upload() {
     echo "🔄 Finalizing upload operations..."
+    local finalization_status=0
     
     # Prepare common S3 paths
     RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
@@ -118,25 +138,27 @@ finalize_upload() {
     restore_aws_credentials
 
     # Final sync to ensure all files are captured
-    if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null
-        s5cmd --no-verify-ssl sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null
-        s5cmd --no-verify-ssl sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null
-    elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/attachments/" "$ATTACHMENTS_S3_PATH" > /dev/null
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" sync "$TMP_DIR/scripts/email-notification-generated/" "${RESULTS_S3_PATH}email-notification-generated/" > /dev/null
-    fi
+    s3_sync_directory "$TMP_DIR/allure-results" "${RESULTS_S3_PATH}allure-results/" || finalization_status=1
+    s3_sync_directory "$TMP_DIR/attachments" "$ATTACHMENTS_S3_PATH" || finalization_status=1
+    s3_sync_directory "$TMP_DIR/scripts/email-notification-generated" \
+        "${RESULTS_S3_PATH}email-notification-generated/" || finalization_status=1
 
-    # Upload marker file
-    echo "${ENABLE_JIRA_INTEGRATION:-false}" > $TMP_DIR/allure-results.uploaded
-    if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        s5cmd --no-verify-ssl cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null
-    elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
-        s5cmd --no-verify-ssl --endpoint-url "$ATP_STORAGE_SERVER_URL" cp "$TMP_DIR/allure-results.uploaded" "${RESULTS_S3_PATH}allure-results.uploaded" > /dev/null
+    if [[ "${ATP_ALLURE_REPORT_GENERATE_IN_RUNNER:-false}" == "true" ]]; then
+        echo "📊 Allure report mode: runner"
+        if generate_and_upload_allure_report; then
+            run_jira_integration "$TMP_DIR/allure-report" || true
+        else
+            finalization_status=1
+        fi
+    else
+        upload_allure_completion_marker || finalization_status=1
+        if [[ -n "${ATP_ALLURE_PROC_HOST:-}" ]]; then
+            echo "📊 Allure report mode: external allure-proc"
+            notify_allure_proc
+        else
+            echo "📊 Allure report mode: upload-only"
+        fi
     fi
-
-    notify_allure_proc
 
     # Generate result URLs
     generate_result_urls
@@ -150,6 +172,13 @@ finalize_upload() {
     echo "Report view is available at: ${ATP_REPORT_VIEW_UI_URL}/${REPORTS_FOLDER_PATH}index.html"
     
     echo "✅ Upload finalization completed"
+    return "$finalization_status"
+}
+
+upload_allure_completion_marker() {
+    local marker_file="$TMP_DIR/allure-results.uploaded"
+    echo "${ENABLE_JIRA_INTEGRATION:-false}" > "$marker_file"
+    s3_upload_file "$marker_file" "${RESULTS_S3_PATH}allure-results.uploaded"
 }
 
 # Ask allure-proc to generate the report. /transform answers only after generation
@@ -204,15 +233,16 @@ notify_allure_proc() {
 
 # Generate URLs for results
 generate_result_urls() {
+    REPORTS_FOLDER_PATH="Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/"
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
         RESULT_URL="${ATP_STORAGE_BUCKET}.${ATP_STORAGE_SERVER_UI_URL}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
+        REPORTS_URL="${ATP_STORAGE_BUCKET}.${ATP_STORAGE_SERVER_UI_URL}/${REPORTS_FOLDER_PATH}"
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
         # Generate base64-encoded URLs for MinIO UI
         RESULTS_FOLDER_PATH="Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
         RESULTS_ENCODED_PATH=$(echo -n "${RESULTS_FOLDER_PATH}" | base64)
         RESULTS_URL="${ATP_STORAGE_SERVER_UI_URL}/browser/${ATP_STORAGE_BUCKET}/${RESULTS_ENCODED_PATH}"
 
-        REPORTS_FOLDER_PATH="Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/"
         REPORTS_ENCODED_PATH=$(echo -n "${REPORTS_FOLDER_PATH}" | base64)
         REPORTS_URL="${ATP_STORAGE_SERVER_UI_URL}/browser/${ATP_STORAGE_BUCKET}/${REPORTS_ENCODED_PATH}"
     fi
