@@ -16,7 +16,17 @@ setup_runtime_environment() {
     
     # Copy node_modules from container to temp directory (Playwright-specific)
     echo "🔧 Copying dependencies from container..."
-    cp -r /app/node_modules "${PROJECT_DIR:-$TMP_DIR}/node_modules"
+    local project_dir="${PROJECT_DIR:-$TMP_DIR}"
+    cp -r /app/node_modules "${project_dir}/node_modules"
+
+    # npm links atp-b3-trace to /app/packages/atp-b3-trace. Node would then load
+    # /app's @playwright/test, a second copy of the one the suite config loads from
+    # this tree. Replace the symlink with the real package files.
+    if [ -d /app/packages/atp-b3-trace ]; then
+        echo "📦 Copying atp-b3-trace into the project so it uses this @playwright/test"
+        rm -rf "${project_dir}/node_modules/atp-b3-trace"
+        cp -r /app/packages/atp-b3-trace "${project_dir}/node_modules/atp-b3-trace"
+    fi
     
     echo "✅ Playwright runtime environment setup completed"
 } 
