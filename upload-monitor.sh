@@ -196,22 +196,3 @@ final_cleanup() {
     unset _BACKGROUND_S3_KEY
     unset _BACKGROUND_S3_SECRET
 }
-
-# Remove generated run data from local disk. Leaves cloned sources in place
-# (e2e mounts the fixture at $TMP_DIR; wiping the whole tree would delete it).
-release_ephemeral_disk() {
-    local project_dir="${PROJECT_DIR:-$TMP_DIR}"
-    echo "🧹 Releasing local ephemeral disk under $TMP_DIR..."
-    rm -rf \
-        "${TMP_DIR}/allure-results" \
-        "${TMP_DIR}/attachments" \
-        "${TMP_DIR}/playwright-report" \
-        "${TMP_DIR}/test-execution.log" \
-        "${TMP_DIR}/playwright-test-list.json"
-    if [ -n "${project_dir}" ] && [ "${project_dir}" != "${TMP_DIR}" ]; then
-        rm -rf "${project_dir}/playwright-report" "${project_dir}/allure-results"
-    fi
-    # Drop image-deps link/copy; tests are finished and results already uploaded.
-    rm -rf "${project_dir}/node_modules"
-    echo "✅ Local ephemeral disk released"
-} 
