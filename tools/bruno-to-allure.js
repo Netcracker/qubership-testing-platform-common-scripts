@@ -59,28 +59,17 @@ function mapBrunoStatus(test, assertionsFailed) {
   return "failed";
 }
 
-function createSteps(test, id, allureResultsDir) {
-  const requestFilename = `${id}-request.json`;
-  const requestHeadersFilename = `${id}-request-headers.json`;
-  const responseFilename = `${id}-response.json`;
-  const responseHeadersFilename = `${id}-response-headers.json`;
-
+function createSteps(test) {
   const requestHeaders = test.request?.headers || {};
   const requestBody = test.request?.data !== undefined
     ? (typeof test.request.data === "string" ? test.request.data : JSON.stringify(test.request.data, null, 2))
     : "/* no request body */";
-
-  fs.writeFileSync(path.join(allureResultsDir, requestHeadersFilename), JSON.stringify(requestHeaders, null, 2));
-  fs.writeFileSync(path.join(allureResultsDir, requestFilename), requestBody, "utf8");
 
   const response = test.response || {};
   const responseHeaders = response.headers || {};
   const responseBody = response.data !== undefined
     ? (typeof response.data === "string" ? response.data : JSON.stringify(response.data, null, 2))
     : "/* no response body */";
-
-  fs.writeFileSync(path.join(allureResultsDir, responseHeadersFilename), JSON.stringify(responseHeaders, null, 2));
-  fs.writeFileSync(path.join(allureResultsDir, responseFilename), responseBody, "utf8");
 
   const steps = [];
 
@@ -117,7 +106,6 @@ function createSteps(test, id, allureResultsDir) {
     name: "Request Headers",
     status: "passed",
     stage: "finished",
-    attachments: [{ name: "Request Headers", source: requestHeadersFilename, type: "application/json" }],
     parameters: Object.entries(requestHeaders).map(([k, v]) => ({ name: k, value: String(v) }))
   });
 
@@ -125,14 +113,13 @@ function createSteps(test, id, allureResultsDir) {
     name: "Request Body",
     status: "passed",
     stage: "finished",
-    attachments: [{ name: "Request Body", source: requestFilename, type: "application/json" }]
+    parameters: [{ name: "body", value: requestBody }]
   });
 
   steps.push({
     name: "Response Headers",
     status: "passed",
     stage: "finished",
-    attachments: [{ name: "Response Headers", source: responseHeadersFilename, type: "application/json" }],
     parameters: Object.entries(responseHeaders).map(([k, v]) => ({ name: k, value: String(v) }))
   });
 
@@ -140,7 +127,7 @@ function createSteps(test, id, allureResultsDir) {
     name: "Response Body",
     status: assertionsFailed ? "failed" : "passed",
     stage: "finished",
-    attachments: [{ name: "Response Body", source: responseFilename, type: "application/json" }]
+    parameters: [{ name: "body", value: responseBody }]
   });
 
   return { steps, assertionsFailed, failedAssertions };
@@ -160,7 +147,7 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
     return 0;
   }
 
-  const children = [];
+  let count = 0;
   for (const test of results) {
     const id = randomUUID();
     const timestamp = test.timestamp ? new Date(test.timestamp).getTime() : Date.now();
@@ -172,7 +159,7 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
     const subSuite = parts.length > 1 ? parts.slice(0, -1).join(" / ") : undefined;
     const packageName = `${collectionName}.${parts.join(".")}`;
 
-    const { steps, assertionsFailed, failedAssertions } = createSteps(test, id, allureResultsDir);
+    const { steps, assertionsFailed, failedAssertions } = createSteps(test);
     const finalStatus = mapBrunoStatus(test, assertionsFailed);
 
     const allureResult = {
@@ -212,21 +199,8 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
     };
 
     fs.writeFileSync(path.join(allureResultsDir, `${id}-result.json`), JSON.stringify(allureResult, null, 2));
-    children.push(id);
+    count++;
   }
-
-  const container = {
-    uuid: randomUUID(),
-    children: children,
-    befores: [],
-    afters: [],
-    start: Date.now(),
-    stop: Date.now()
-  };
-  fs.writeFileSync(
-    path.join(allureResultsDir, `${randomUUID()}-container.json`),
-    JSON.stringify(container, null, 2)
-  );
 
   const triggerAuthor = (process.env.TRIGGER_AUTHOR || "runner").trim();
   const executor = {
@@ -240,7 +214,7 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
   );
 
   console.log(`✅ Successfully converted Bruno report to Allure format. Results saved in: ${allureResultsDir}`);
-  return children.length;
+  return count;
 }
 
 function main() {
