@@ -63,6 +63,8 @@ finalize_once() {
       fi
     fi
 
+    inject_custom_allure_labels "$TMP_DIR/allure-results" || true
+
     generate_email_notification_json || true
 
     # Source runner-specific missed-test detector if provided.
