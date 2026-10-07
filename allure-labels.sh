@@ -3,7 +3,7 @@
 # Environment variables and their corresponding Allure label names.
 # Add future runner-wide labels here so every result producer uses the same mapping.
 ALLURE_LABEL_MAPPINGS=(
-  "TYPE_RUN:type_run",
+  "TYPE_RUN:type_run"
   "TRIGGER_PIPELINE_SOURCE:trigger_pipeline_source"
 )
 
