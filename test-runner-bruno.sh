@@ -51,7 +51,7 @@ run_bruno_from_test_params() {
     echo "BRUNO_TAGS=${BRUNO_TAGS_CLI}"
     while IFS= read -r key; do
       case "$key" in
-        *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME|ATP_APPLICATION_VERSION|TRIGGER_PIPELINE_SOURCE)
+        *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME|ATP_APPLICATION_VERSION|TRIGGER_PIPELINE_SOURCE|*_SERVER|*_VERSION)
           printf '%s=%s\n' "$key" "${!key}"
           export "${key?}"
           echo "  Exported: $key" >&2
