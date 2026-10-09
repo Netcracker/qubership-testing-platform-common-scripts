@@ -159,6 +159,9 @@ ENTRYPOINT ["/entrypoint.sh"]
 - `ATP_STORAGE_SERVER_UI_URL` - S3 UI URL
 - `PAUSE_BEFORE_END` - Pause before container exit
 - `UPLOAD_METHOD` - Upload method: `cp` (file-based) or `sync` (directory-based, triggered by inotifywait)
+- `DEBUG_HTTP_MODE` - Set to `true` to keep HTTP attachments for passed Newman tests; by default, passed-test attachments are removed before upload
+
+The Newman runner uses `cp` upload mode by default so Allure attachments can be pruned after the run and before the final S3 upload. Other runner images retain their own upload-mode defaults.
 
 ## Benefits
 
