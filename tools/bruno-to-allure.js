@@ -59,29 +59,11 @@ function mapBrunoStatus(test, assertionsFailed) {
   return "failed";
 }
 
-function createSteps(test, id, allureResultsDir) {
-  const requestFilename = `${id}-request.json`;
-  const requestHeadersFilename = `${id}-request-headers.json`;
-  const responseFilename = `${id}-response.json`;
-  const responseHeadersFilename = `${id}-response-headers.json`;
+function isDebugHttpMode() {
+  return String(process.env.DEBUG_HTTP_MODE || "").toLowerCase() === "true";
+}
 
-  const requestHeaders = test.request?.headers || {};
-  const requestBody = test.request?.data !== undefined
-    ? (typeof test.request.data === "string" ? test.request.data : JSON.stringify(test.request.data, null, 2))
-    : "/* no request body */";
-
-  fs.writeFileSync(path.join(allureResultsDir, requestHeadersFilename), JSON.stringify(requestHeaders, null, 2));
-  fs.writeFileSync(path.join(allureResultsDir, requestFilename), requestBody, "utf8");
-
-  const response = test.response || {};
-  const responseHeaders = response.headers || {};
-  const responseBody = response.data !== undefined
-    ? (typeof response.data === "string" ? response.data : JSON.stringify(response.data, null, 2))
-    : "/* no response body */";
-
-  fs.writeFileSync(path.join(allureResultsDir, responseHeadersFilename), JSON.stringify(responseHeaders, null, 2));
-  fs.writeFileSync(path.join(allureResultsDir, responseFilename), responseBody, "utf8");
-
+function createSteps(test) {
   const steps = [];
 
   const allAssertions = [
@@ -111,39 +93,20 @@ function createSteps(test, id, allureResultsDir) {
         } : undefined
       });
     }
-  }
-
-  steps.push({
-    name: "Request Headers",
-    status: "passed",
-    stage: "finished",
-    attachments: [{ name: "Request Headers", source: requestHeadersFilename, type: "application/json" }],
-    parameters: Object.entries(requestHeaders).map(([k, v]) => ({ name: k, value: String(v) }))
-  });
-
-  steps.push({
-    name: "Request Body",
-    status: "passed",
-    stage: "finished",
-    attachments: [{ name: "Request Body", source: requestFilename, type: "application/json" }]
-  });
-
-  steps.push({
-    name: "Response Headers",
-    status: "passed",
-    stage: "finished",
-    attachments: [{ name: "Response Headers", source: responseHeadersFilename, type: "application/json" }],
-    parameters: Object.entries(responseHeaders).map(([k, v]) => ({ name: k, value: String(v) }))
-  });
-
-  steps.push({
-    name: "Response Body",
-    status: assertionsFailed ? "failed" : "passed",
-    stage: "finished",
-    attachments: [{ name: "Response Body", source: responseFilename, type: "application/json" }]
-  });
+  } 
 
   return { steps, assertionsFailed, failedAssertions };
+}
+
+function extractBody(data) {
+  if (typeof data === "string") {
+    try {
+      return JSON.parse(data);
+    } catch {
+      return data;
+    }
+  }
+  return data || {};
 }
 
 function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
@@ -160,7 +123,7 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
     return 0;
   }
 
-  const children = [];
+  let count = 0;
   for (const test of results) {
     const id = randomUUID();
     const timestamp = test.timestamp ? new Date(test.timestamp).getTime() : Date.now();
@@ -172,8 +135,42 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
     const subSuite = parts.length > 1 ? parts.slice(0, -1).join(" / ") : undefined;
     const packageName = `${collectionName}.${parts.join(".")}`;
 
-    const { steps, assertionsFailed, failedAssertions } = createSteps(test, id, allureResultsDir);
+    const { steps, assertionsFailed, failedAssertions } = createSteps(test);
+
     const finalStatus = mapBrunoStatus(test, assertionsFailed);
+    if (finalStatus === "failed" || finalStatus === "broken" || isDebugHttpMode()) {
+      const requestFilename = `${id}-request.json`;
+      const responseFilename = `${id}-response.json`;
+
+      const request = {
+        url: test.request?.url || "n/a",
+        method: test.request?.method || "n/a",
+        headers: test.request?.headers || {},
+        requestBody: extractBody(test.request?.data)
+      };
+      const response = {
+        status: test.response?.status || "n/a",
+        headers: test.response?.headers || {},
+        responseBody: extractBody(test.response?.data)
+      };
+
+      fs.writeFileSync(path.join(allureResultsDir, requestFilename), JSON.stringify(request, null, 2), "utf8");
+      fs.writeFileSync(path.join(allureResultsDir, responseFilename), JSON.stringify(response, null, 2), "utf8");
+
+      steps.push({
+        name: "Request",
+        status: "passed",
+        stage: "finished",
+        attachments: [{ name: "Request", source: requestFilename, type: "application/json" }]
+      });
+
+      steps.push({
+        name: "Response",
+        status: assertionsFailed ? "failed" : "passed",
+        stage: "finished",
+        attachments: [{ name: "Response", source: responseFilename, type: "application/json" }]
+      });
+    }
 
     const allureResult = {
       uuid: id,
@@ -212,21 +209,8 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
     };
 
     fs.writeFileSync(path.join(allureResultsDir, `${id}-result.json`), JSON.stringify(allureResult, null, 2));
-    children.push(id);
+    count++;
   }
-
-  const container = {
-    uuid: randomUUID(),
-    children: children,
-    befores: [],
-    afters: [],
-    start: Date.now(),
-    stop: Date.now()
-  };
-  fs.writeFileSync(
-    path.join(allureResultsDir, `${randomUUID()}-container.json`),
-    JSON.stringify(container, null, 2)
-  );
 
   const triggerAuthor = (process.env.TRIGGER_AUTHOR || "runner").trim();
   const executor = {
@@ -240,7 +224,7 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
   );
 
   console.log(`✅ Successfully converted Bruno report to Allure format. Results saved in: ${allureResultsDir}`);
-  return children.length;
+  return count;
 }
 
 function main() {
