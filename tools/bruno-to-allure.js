@@ -31,6 +31,74 @@ function isEnvironmentOrMetaFile(test) {
   return name === "collection.bru" || name === "folder.bru" || name === "collection";
 }
 
+function getMetaBlock(source) {
+  const match = String(source || "").match(/\bmeta\s*\{([\s\S]*?)^\s*\}/m);
+  return match ? match[1] : "";
+}
+
+function stripBrunoComment(value) {
+  return value.replace(/\s+#.*$/, "").trim();
+}
+
+function parseBrunoTags(source) {
+  const meta = getMetaBlock(source);
+  const match = meta.match(/\btags\s*:\s*\[([\s\S]*?)\]/m);
+  if (!match) return [];
+
+  return match[1]
+    .split(/[,\r\n]+/)
+    .map(value => stripBrunoComment(value).replace(/^["']|["']$/g, "").trim())
+    .filter(Boolean);
+}
+
+function parseBrunoAllureLabels(source) {
+  const meta = getMetaBlock(source);
+  const labels = [];
+  const labelPattern = /^\s*allure\.label\.([A-Za-z0-9_.-]+)\s*:\s*(.*?)\s*$/gm;
+  let match;
+
+  while ((match = labelPattern.exec(meta)) !== null) {
+    const name = match[1].trim();
+    const value = stripBrunoComment(match[2]).replace(/^["']|["']$/g, "").trim();
+    if (name && value) labels.push({ name, value });
+  }
+
+  return labels;
+}
+
+function toAllureLabels({ tags = [], allureLabels = [] } = {}) {
+  return [
+    ...tags.map(value => ({ name: "tag", value })),
+    ...allureLabels
+  ];
+}
+
+function resolveBrunoSourceFile(test, collectionDir) {
+  if (!collectionDir) return undefined;
+
+  const reportPath = normalizeBrunoPath(test);
+  if (!reportPath || path.isAbsolute(reportPath)) return undefined;
+
+  const relativePath = reportPath.endsWith(".bru") ? reportPath : `${reportPath}.bru`;
+  const collectionRoot = path.resolve(collectionDir);
+  const sourceFile = path.resolve(collectionRoot, relativePath);
+  const relativeToRoot = path.relative(collectionRoot, sourceFile);
+  if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) return undefined;
+
+  return fs.existsSync(sourceFile) ? sourceFile : undefined;
+}
+
+function getBrunoSourceLabels(test, collectionDir) {
+  const sourceFile = resolveBrunoSourceFile(test, collectionDir);
+  if (!sourceFile) return [];
+
+  const source = fs.readFileSync(sourceFile, "utf8");
+  return toAllureLabels({
+    tags: parseBrunoTags(source),
+    allureLabels: parseBrunoAllureLabels(source)
+  });
+}
+
 function parseBrunoResults(brunoReport) {
   if (Array.isArray(brunoReport)) {
     if (brunoReport.every(item => item && Array.isArray(item.results))) {
@@ -109,7 +177,7 @@ function extractBody(data) {
   return data || {};
 }
 
-function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
+function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName, collectionDir) {
   if (!fs.existsSync(allureResultsDir)) {
     fs.mkdirSync(allureResultsDir, { recursive: true });
   }
@@ -138,6 +206,7 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
     const { steps, assertionsFailed, failedAssertions } = createSteps(test);
 
     const finalStatus = mapBrunoStatus(test, assertionsFailed);
+    const sourceLabels = getBrunoSourceLabels(test, collectionDir);
     if (finalStatus === "failed" || finalStatus === "broken" || isDebugHttpMode()) {
       const requestFilename = `${id}-request.json`;
       const responseFilename = `${id}-response.json`;
@@ -202,7 +271,8 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName) {
         { name: "host", value: (() => { try { return new URL(test.request?.url).host; } catch { return "n/a"; } })() },
         { name: "framework", value: "bruno" },
         { name: "language", value: "javascript" },
-        { name: "user", value: process.env.TRIGGER_AUTHOR || "runner" }
+        { name: "user", value: process.env.TRIGGER_AUTHOR || "runner" },
+        ...sourceLabels
       ].filter(l => l.value !== undefined),
       description: test.description || test.name || "No description provided",
       descriptionHtml: test.description || test.name || "No description provided"
@@ -232,9 +302,10 @@ function main() {
   const brunoReportPath = args[0];
   const allureResultsDir = args[1] || path.join(__dirname, "allure-results");
   const collectionName = args[2] || "unknown-collection";
+  const collectionDir = args[3];
 
   try {
-    convertBrunoReport(brunoReportPath, allureResultsDir, collectionName);
+    convertBrunoReport(brunoReportPath, allureResultsDir, collectionName, collectionDir);
   } catch (error) {
     console.error(`❌ Error processing Bruno report: ${error.message}`);
     process.exit(1);
@@ -249,5 +320,8 @@ module.exports = {
   convertBrunoReport,
   isEnvironmentOrMetaFile,
   mapBrunoStatus,
-  parseBrunoResults
+  parseBrunoAllureLabels,
+  parseBrunoResults,
+  parseBrunoTags,
+  toAllureLabels
 };
