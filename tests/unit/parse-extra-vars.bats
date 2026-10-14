@@ -73,7 +73,9 @@ setup() {
 
 @test "extract_test_type stores the type of the execution list in the named variable" {
     command -v jq >/dev/null || skip "jq is not installed"
-    local result=""
-    extract_test_type '{"execution_list":[{"type":"playwright"}]}' result >/dev/null
-    [ "$result" = "playwright" ]
+    # The output variable must not be called "result": extract_test_type has a local of that name,
+    # so the assignment would land in the function and leave the caller's variable empty.
+    local detected_type=""
+    extract_test_type '{"execution_list":[{"type":"playwright"}]}' detected_type >/dev/null
+    [ "$detected_type" = "playwright" ]
 }
