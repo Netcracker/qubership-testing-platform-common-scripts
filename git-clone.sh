@@ -296,7 +296,7 @@ clone_repository() {
 
     AUTH_REPO_URL="$ATP_TESTS_GIT_REPO_URL"
     if [[ "$AUTH_REPO_URL" =~ ^https:// ]]; then
-        AUTH_REPO_URL=$(echo "$AUTH_REPO_URL" | sed "s|^https://|https://oauth2:${ATP_TESTS_GIT_TOKEN}@|")
+        AUTH_REPO_URL="https://oauth2:${ATP_TESTS_GIT_TOKEN}@${AUTH_REPO_URL#https://}"
     fi
 
     echo "📥 Cloning repository (branch=${ATP_TESTS_GIT_REPO_BRANCH}, depth=1)..."
