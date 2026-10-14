@@ -37,6 +37,7 @@ run_bruno_from_test_params() {
   BRUNO_ENV_STR="$BRUNO_ENV"
   BRUNO_FLAGS_CLI="$BRUNO_FLAGS"
   extract_bruno_folders "$BRUNO_FOLDERS" "BRUNO_FOLDERS_ARRAY"
+  extract_bruno_tags "$BRUNO_TAGS" "BRUNO_TAGS_CLI"
 
   cd "${PROJECT_DIR:-$TMP_DIR}" || return 1
 
@@ -49,9 +50,10 @@ run_bruno_from_test_params() {
   # Single pass: write environment.properties AND export matching vars to subprocesses.
   {
     echo "BRUNO_ENV=${BRUNO_ENV_STR}"
+    echo "BRUNO_TAGS=${BRUNO_TAGS_CLI}"
     while IFS= read -r key; do
       case "$key" in
-        *_URL|*_LOGIN|*_PASSWORD|NAMESPACE|SERVER_HOSTNAME|ATP_APPLICATION_VERSION|TRIGGER_PIPELINE_SOURCE)
+        *_URL|*_LOGIN|NAMESPACE|SERVER_HOSTNAME|TRIGGER_PIPELINE_SOURCE|*_SERVER|*_VERSION)
           printf '%s=%s\n' "$key" "${!key}"
           export "${key?}"
           echo "  Exported: $key" >&2
@@ -61,11 +63,12 @@ run_bruno_from_test_params() {
   } > "$PATH_TO_ALLURE_RESULTS/environment.properties"
 
   # Export everything the subprocess needs (arrays can't cross fork; serialise folders).
-  export -f run_collection_body resolve_folders run_bru write_allure_placeholder wait_for_collection_slot
+  export -f run_collection_body resolve_folders list_bru_run_targets run_bru write_allure_placeholder wait_for_collection_slot \
+    bruno_collection_display_name bruno_collection_file_slug
   export -f compose_b3_trace_id generate_b3_testcase_id generate_b3_span_id _b3_random_hex
 
   export TMP_DIR PROJECT_DIR PATH_TO_ATTACHMENTS_DIR PATH_TO_ALLURE_RESULTS
-  export BRU_BIN BRUNO_ENV_STR BRUNO_FLAGS_CLI BRUNO_GLOBAL_ENV BRUNO_WORKSPACE_PATH
+  export BRU_BIN BRUNO_ENV_STR BRUNO_FLAGS_CLI BRUNO_GLOBAL_ENV BRUNO_WORKSPACE_PATH BRUNO_TAGS_CLI
   export PROJECT_ID RUN_ID
 
   if [ "${#BRUNO_FOLDERS_ARRAY[@]}" -gt 0 ]; then
@@ -79,6 +82,9 @@ run_bruno_from_test_params() {
   echo "Collections to run:"
   printf "  %s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
   echo "Total: ${#BRUNO_COLLECTIONS_ARRAY[@]}  parallelism=${parallelism}"
+  if [ -n "${BRUNO_TAGS_CLI}" ]; then
+    echo "Tags: ${BRUNO_TAGS_CLI}"
+  fi
 
   printf "%s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}" > "$PATH_TO_ALLURE_RESULTS/collections.txt"
 
@@ -94,7 +100,7 @@ run_bruno_from_test_params() {
   for collection in "${BRUNO_COLLECTIONS_ARRAY[@]}"; do
     collection_index=$((collection_index + 1))
     local cname
-    cname=$(basename "$collection")
+    cname=$(bruno_collection_file_slug "$collection")
     local prefix="[${cname}|${collection_index}/${total}]"
     bash -c 'run_collection_body "$1"' _ "$collection" > >(sed "s#^#${prefix} #") 2>&1 &
     active_collection_pids+=("$!")

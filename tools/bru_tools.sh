@@ -46,7 +46,7 @@ discover_bruno_collections() {
 
     echo "🔍 Discovering Bruno collections in 'collections' directory"
     mapfile -t discovered < <(
-        find collections -mindepth 2 -maxdepth 2 -type f -name "collection.bru" \
+        find collections -mindepth 2 -type f -name "collection.bru" \
             ! -path "*/.git/*" \
             ! -path "*/node_modules/*" \
             -exec dirname {} \; | sort -u
@@ -59,6 +59,20 @@ discover_bruno_collections() {
     eval "$output_var_name=(${q# })"
 }
 
+# Path relative to collections/ for display and Allure suite.
+# Explicit names without a collections/ prefix are unchanged.
+bruno_collection_display_name() {
+    local dir="${1#./}"
+    dir="${dir#collections/}"
+    printf '%s' "$dir"
+}
+
+# Filesystem-safe slug: display name with '/' replaced by '_'.
+bruno_collection_file_slug() {
+    local name
+    name=$(bruno_collection_display_name "$1")
+    printf '%s' "${name//\//_}"
+}
 
 # Extract Bruno folders from string separated by '|' and convert them to an array
 # Args:
@@ -90,4 +104,44 @@ extract_bruno_folders() {
         output_message+="\n    - $folder"
     done
     echo -e "$output_message"
+}
+
+# Extract Bruno tags from a pipe-separated string (EXTRA_VARS splits on comma,
+# so '|' is used the same way as BRUNO_FOLDERS). The CLI value is comma-joined
+# because `bru run --tags` expects a comma-separated list.
+# Args:
+#   $1 - Input string (e.g. "smoke|sanity")
+#   $2 - Name of the output variable to store the comma-separated tag string
+# ============================================
+extract_bruno_tags() {
+    local input="$1"
+    local output_var_name="$2"
+    local result_array=()
+
+    if [[ -n "$input" ]]; then
+        IFS='|' read -ra result_array <<< "$input"
+        local cleaned=()
+        local tag
+        for tag in "${result_array[@]}"; do
+            tag=$(echo "$tag" | xargs)
+            if [[ -n "$tag" ]]; then
+                cleaned+=("$tag")
+            fi
+        done
+        result_array=("${cleaned[@]}")
+    fi
+
+    local joined=""
+    if [[ ${#result_array[@]} -gt 0 ]]; then
+        local IFS=','
+        joined="${result_array[*]}"
+    fi
+
+    eval "$output_var_name=\"$joined\""
+
+    if [[ -n "$joined" ]]; then
+        echo "➡️ Bruno tags filter: ${joined}"
+    else
+        echo "➡️ Bruno tags filter: (none)"
+    fi
 }
