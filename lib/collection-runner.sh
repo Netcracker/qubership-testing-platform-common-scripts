@@ -278,6 +278,8 @@ run_collection_body() {
   echo "🚀 START collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
 
   pushd "$collection_path" > /dev/null || return 1
+  # Remember the collection root: popd below changes $PWD before conversion.
+  local collection_root="$PWD"
 
   # Resolve requested folder names to real paths inside this collection.
   RESOLVED_FOLDERS=()
@@ -393,7 +395,8 @@ run_collection_body() {
       node /scripts/tools/bruno-to-allure.js \
         "$bruno_report_path" \
         "$PATH_TO_ALLURE_RESULTS" \
-        "$collection_name"
+        "$collection_name" \
+        "$collection_root"
     fi
     echo "🏁 COLLECTION FULLY FINISHED collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
   else
