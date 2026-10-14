@@ -177,3 +177,17 @@ ENTRYPOINT ["/entrypoint.sh"]
 2. Create runtime-specific test runner if needed
 3. Update Dockerfile to copy appropriate modules
 4. Test with your specific runtime environment
+
+## Tests
+
+The Bats tests under `tests/` run in CI (`.github/workflows/tests.yaml`) and need no runner image:
+
+- `tests/smoke/` checks that every shell script parses (`bash -n`), that every JavaScript tool parses
+  (`node --check`), that no script defines a function twice, and that each script can be sourced in a clean shell
+  and defines the functions listed in `tests/smoke/manifest.txt`. A script added to the repository must be
+  added to the manifest too.
+- `tests/unit/` holds unit tests for helpers that do not belong to a single runner, such as `parse-extra-vars.sh`.
+  Tests for one runner's behavior live in that runner's repository.
+
+To run them locally, install [Bats](https://github.com/bats-core/bats-core) and run `bats --recursive tests` from
+the repository root. `jq` and `node` are optional: the tests that need them are skipped when they are missing.

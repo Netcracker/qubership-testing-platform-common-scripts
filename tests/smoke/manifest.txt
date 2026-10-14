@@ -1,0 +1,31 @@
+# One line per shell script: <path> | <scripts sourced first> | <functions it must define>
+#
+# tests/smoke/functions.bats sources each script in a clean shell and checks that every listed function
+# exists. tests/smoke/scripts.bats fails for a shell script that is missing from this file, so a new
+# script has to be added here.
+#
+# A "-" in the last column means the script runs code when sourced, so it gets the syntax check only.
+allure-labels.sh | | inject_custom_allure_labels
+error-handler.sh | | fail finalize_once
+generate-bruno-global-env.sh | | _yaml_quote generate_bruno_global_env
+git-clone.sh | | _clear_git_insteadOf _finalize_clone _has_postman_collection _has_repo_markers _is_ignore_git_modules _is_ignore_structure _report_git_fetch_error _resolve_project_dir _set_project_dir_from_rel _validate_repo_markers clone_repository
+init.sh | | init_environment
+native-report.sh | | save_native_report
+parse-extra-vars.sh | | _extra_vars_trim extract_test_type parse_extra_vars
+push-metrics.sh | | _metrics_auth_header _metrics_base_trim _metrics_build_url _metrics_dispatch _push_to_endpoint push_metrics
+push-metrics-start.sh | push-metrics.sh | push_metrics_start
+render-environment-configuration.sh | | render_environment_configuration
+runtime-setup.sh | | setup_runtime_environment
+test-runner-bruno.sh | | run_bruno_from_test_params
+test-runner.sh | | assert_collection_allowed_for_runner run_tests
+upload-monitor.sh | | clear_sensitive_vars final_cleanup finalize_upload generate_result_urls restore_aws_credentials start_inotify_uploader start_sync_uploader start_upload_monitoring sync_directory_to_s3 upload_file_to_s3
+lib/collection-runner.sh | | list_bru_run_targets resolve_folders run_bru run_collection_body wait_for_collection_slot write_allure_placeholder
+tools/b3_trace.sh | | _b3_random_hex compose_b3_trace_id generate_b3_span_id generate_b3_testcase_id
+tools/bru_tools.sh | | bruno_collection_display_name bruno_collection_file_slug discover_bruno_collections extract_bruno_collections extract_bruno_folders extract_bruno_tags
+runtimes/bruno-setup.sh | | setup_runtime_environment
+runtimes/newman-setup.sh | | setup_runtime_environment
+runtimes/playwright-setup.sh | | setup_runtime_environment
+runtimes/python-setup.sh | | setup_runtime_environment
+email-notification/calculate-email-notification-variables.sh | | -
+email-notification/generate-email-notification-file.sh | | generate_email_notification_file
+email-notification/generate-email-notification-json.sh | | generate_email_notification_json
