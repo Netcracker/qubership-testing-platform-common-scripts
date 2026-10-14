@@ -21,6 +21,7 @@ generate_email_notification_file() {
         echo "ℹ️ $1"
     }
 
+    # shellcheck disable=SC2329
     log_success() {
         echo "✅ $1"
     }
@@ -65,7 +66,7 @@ generate_email_notification_file() {
     log_info "Generating message from template: $template_file"
 
     # Calculate pass rate and test details
-    # shellcheck source=/home/runner/work/qubership-testing-platform-common-scripts/qubership-testing-platform-common-scripts/scripts/email-notification/calculate-email-notification-variables.sh
+    # shellcheck source=calculate-email-notification-variables.sh
     source "$SCRIPT_DIR/calculate-email-notification-variables.sh" "$allure_results_dir" || true
 
     # Calculate additional metrics
@@ -192,7 +193,7 @@ generate_email_notification_file() {
         message_content=$(echo "$message_content" | sed "/{{TEST_DETAILS}}/r $temp_details_file" | sed "/{{TEST_DETAILS}}/d")
         rm -f "$temp_details_file"
     else
-        message_content=$(echo "$message_content" | sed "s|{{TEST_DETAILS}}|No test details available|g")
+        message_content="${message_content//\{\{TEST_DETAILS\}\}/No test details available}"
     fi
 
     # Write the generated message to output file

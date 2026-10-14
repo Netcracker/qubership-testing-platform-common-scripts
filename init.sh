@@ -39,5 +39,12 @@ init_environment() {
     export TMP_DIR="/tmp/clone"
     mkdir -p "$TMP_DIR"
 
+    # PROJECT_ID/RUN_ID are supplied by the orchestrator and used to build the
+    # X-B3-TraceId propagated to systems under test (informational only: a
+    # missing value disables B3 header generation, it does not fail the run).
+    if [[ -z "${PROJECT_ID:-}" || -z "${RUN_ID:-}" ]]; then
+        echo "⚠️ PROJECT_ID/RUN_ID not set — B3 trace/span headers will not be propagated"
+    fi
+
     echo "✅ Environment initialized successfully"
 }

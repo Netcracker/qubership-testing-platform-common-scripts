@@ -101,7 +101,7 @@ list_bru_run_targets() {
 }
 
 # ---------------------------------------------------------------------------
-# run_bru REPORT_PATH LOG_PATH [FOLDER...]
+# run_bru REPORT_PATH LOG_PATH TRACE_ID [FOLDER...]
 #
 # Runs bru.js with a timeout, streaming output to tee. Optional trailing
 # arguments are passed directly to bru as folder targets.
@@ -109,6 +109,7 @@ list_bru_run_targets() {
 # Args:
 #   $1  Path for the --reporter-json output file
 #   $2  Path for the raw tee log file
+#   $3  X-B3-TraceId value for this test case, or "" to skip B3 propagation
 #   $@ (remaining)  Optional folder paths to restrict the run
 #
 # Globals read:  BRU_BIN, COLLECTION_TIMEOUT, BRUNO_FLAGS_CLI,
@@ -119,7 +120,8 @@ list_bru_run_targets() {
 run_bru() {
   local report_path="$1"
   local log_path="$2"
-  shift 2
+  local trace_id="$3"
+  shift 3
 
   if [ -n "${BRUNO_ENV_STR}" ]; then
     local env_flag="--env ${BRUNO_ENV_STR}"
@@ -143,6 +145,12 @@ run_bru() {
     local tags_flag=""
   fi
 
+  if [ -n "$trace_id" ]; then
+    local trace_flag="--env-var X_B3_TRACE_ID=${trace_id}"
+  else
+    local trace_flag=""
+  fi
+
   # shellcheck disable=SC2086
   timeout -s TERM -k 30 \
     "${COLLECTION_TIMEOUT:-3600}s" \
@@ -151,6 +159,7 @@ run_bru() {
     ${env_flag} \
     ${global_env_flags} \
     ${tags_flag} \
+    ${trace_flag} \
     --reporter-json "${report_path}" \
     "$@" \
     2>&1 | tee "${log_path}"
@@ -241,7 +250,8 @@ wait_for_collection_slot() {
 # Globals read:  PROJECT_DIR, PATH_TO_ATTACHMENTS_DIR, PATH_TO_ALLURE_RESULTS,
 #                BRUNO_FOLDERS_STR, BRU_BIN, BRUNO_ENV_STR, BRUNO_GLOBAL_ENV,
 #                BRUNO_WORKSPACE_PATH, BRUNO_ENV_VARS_CLI, BRUNO_FLAGS_CLI,
-#                BRUNO_TAGS_CLI, COLLECTION_TIMEOUT
+#                BRUNO_TAGS_CLI, COLLECTION_TIMEOUT, PROJECT_ID,
+#                RUN_ID (B3 trace propagation, see compose_b3_trace_id in tools/b3_trace.sh)
 # ---------------------------------------------------------------------------
 run_collection_body() {
   local collection_dir="$1"
@@ -281,6 +291,13 @@ run_collection_body() {
   # Remember the collection root: popd below changes $PWD before conversion.
   local collection_root="$PWD"
 
+  # One test case = one collection run: a single X-B3-TraceId covers every
+  # request in this collection; each request gets its own X-B3-SpanId (set by
+  # the injected pre-request script, see bru-inject-b3-headers.js).
+  node /scripts/tools/bru-inject-b3-headers.js "$collection_path" || true
+  local b3_trace_id
+  b3_trace_id="$(compose_b3_trace_id)"
+
   # Resolve requested folder names to real paths inside this collection.
   RESOLVED_FOLDERS=()
   resolve_folders BRUNO_FOLDERS_ARRAY
@@ -309,7 +326,7 @@ run_collection_body() {
         bru_args=("${BRU_RUN_TARGETS[@]}")
       fi
 
-      if ! run_bru "$bruno_report_path" "$raw_log_path" "${bru_args[@]}"; then
+      if ! run_bru "$bruno_report_path" "$raw_log_path" "$b3_trace_id" "${bru_args[@]}"; then
         echo "❌ FAILED: ${collection_name} rc=$?"
         echo "----- LAST 200 LINES: ${collection_name} -----"
         tail -n 200 "${raw_log_path}" || true
@@ -342,7 +359,7 @@ run_collection_body() {
     echo "🔍 Running folders: ${RESOLVED_FOLDERS[*]}"
     echo "BRUNO RUN START collection=${collection_name} pid=$$ mode=folders time=$(date '+%H:%M:%S')"
 
-    if ! run_bru "$bruno_report_path" "$raw_log_path" "${RESOLVED_FOLDERS[@]}"; then
+    if ! run_bru "$bruno_report_path" "$raw_log_path" "$b3_trace_id" "${RESOLVED_FOLDERS[@]}"; then
       echo "❌ FAILED: ${collection_name} rc=$?"
       echo "----- LAST 200 LINES: ${collection_name} -----"
       tail -n 200 "${raw_log_path}" || true

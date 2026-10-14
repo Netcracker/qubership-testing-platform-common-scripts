@@ -23,6 +23,7 @@ generate_email_notification_json() {
         echo "ℹ️ $1"
     }
 
+    # shellcheck disable=SC2329
     log_success() {
         echo "✅ $1"
     }
@@ -49,7 +50,7 @@ generate_email_notification_json() {
 
     # Calculate pass rate and test details (may return non-zero when no results;
     # finalize_once pre-seeds FAILED stats in that case).
-    # shellcheck source=/home/runner/work/qubership-testing-platform-common-scripts/qubership-testing-platform-common-scripts/scripts/email-notification/calculate-email-notification-variables.sh
+    # shellcheck source=calculate-email-notification-variables.sh
     source "$SCRIPT_DIR/calculate-email-notification-variables.sh" "$allure_results_dir" || true
     unset TEST_DETAILS_STRING
 
