@@ -24,6 +24,8 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Bats
-        run: npm install --global bats@1.11.1
+        run: |
+          npm install --prefix "$RUNNER_TEMP/bats" bats@1.11.1
+          echo "$RUNNER_TEMP/bats/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Run tests
         run: bats --recursive --print-output-on-failure tests
