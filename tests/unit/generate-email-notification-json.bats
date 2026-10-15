@@ -37,8 +37,9 @@ make_results() {
 }
 
 # Run the generator in a fresh bash so the script's function is loaded the same way the runner does.
-run_generator() {
-    bash -c "source '$SCRIPT'; generate_email_notification_json"
+# Used as: run bash -c "$GENERATOR_CMD" (see generator_cmd below); avoids calling a bash function through `run`.
+generator_cmd() {
+    printf 'source %q; generate_email_notification_json' "$SCRIPT"
 }
 
 @test "writes valid JSON when test_details exceeds the single-argument size limit" {
@@ -47,7 +48,7 @@ run_generator() {
     total=$(cat "$ALLURE_DIR"/*-result.json | wc -c)
     [ "$total" -gt 131072 ]
 
-    run run_generator
+    run bash -c "$(generator_cmd)"
     [ "$status" -eq 0 ]
     [ -f "$OUTPUT_FILE" ]
     jq empty "$OUTPUT_FILE"
@@ -57,20 +58,20 @@ run_generator() {
 
 @test "does not reference the argument-list error in the output" {
     make_results 2000
-    run run_generator
+    run bash -c "$(generator_cmd)"
     [ "$status" -eq 0 ]
     [[ "$output" != *"Argument list too long"* ]]
 }
 
 @test "writes an empty test_details array when there are no results" {
-    run run_generator
+    run bash -c "$(generator_cmd)"
     jq empty "$OUTPUT_FILE"
     [ "$(jq '.test_details | length' "$OUTPUT_FILE")" -eq 0 ]
 }
 
 @test "leaves no temporary test-details file behind" {
     make_results 10
-    run run_generator
+    run bash -c "$(generator_cmd)"
     [ "$status" -eq 0 ]
     [ -z "$(find "$OUT_DIR" -name 'test-details.*' -print -quit)" ]
 }
@@ -79,7 +80,7 @@ run_generator() {
     make_results 3
     # Corrupt one result file so the jq -s pipeline fails.
     printf '{not json' >"$ALLURE_DIR/bad-result.json"
-    run run_generator
+    run bash -c "$(generator_cmd)"
     [ "$status" -eq 1 ]
     [[ "$output" == *"Failed to build test_details"* ]]
     jq empty "$OUTPUT_FILE"
