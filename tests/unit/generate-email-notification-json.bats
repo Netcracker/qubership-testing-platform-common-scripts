@@ -3,8 +3,13 @@
 # so large Allure result sets (more than the 128KB MAX_ARG_STRLEN limit) must still produce valid JSON.
 
 setup() {
-    REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-    SCRIPT="$REPO_ROOT/scripts/email-notification/generate-email-notification-json.sh"
+    # This file lives at scripts/tests/unit here and at tests/unit in the common-scripts checkout.
+    if [[ -f "$BATS_TEST_DIRNAME/../../email-notification/generate-email-notification-json.sh" ]]; then
+        SCRIPT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)/email-notification/generate-email-notification-json.sh"
+    else
+        SCRIPT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)/scripts/email-notification/generate-email-notification-json.sh"
+    fi
+    [[ -f "$SCRIPT" ]] || skip "generator script not found at $SCRIPT"
     command -v jq >/dev/null || skip "jq is not installed"
 
     # BATS_TEST_TMPDIR is not set by every bats version, so create our own scratch directory.
