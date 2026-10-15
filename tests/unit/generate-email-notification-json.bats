@@ -36,8 +36,7 @@ make_results() {
     local count="$1" i pad
     pad="$(printf 'x%.0s' $(seq 1 120))"
     for ((i = 1; i <= count; i++)); do
-        printf '{"uuid":"u%d","historyId":"h%d","name":"test %d %s","status":"passed","start":1,"stop":2}\n' \
-            "$i" "$i" "$i" "$pad" >"$ALLURE_DIR/$i-result.json"
+        printf '{"uuid":"u%d","historyId":"h%d","name":"test %d %s","status":"passed","start":1,"stop":2}\n' "$i" "$i" "$i" "$pad" >"$ALLURE_DIR/$i-result.json"
     done
 }
 
