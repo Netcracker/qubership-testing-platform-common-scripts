@@ -14,7 +14,11 @@ parse_extra_vars() {
     local normalized line name value
     local -a _ev_names _ev_values
 
-    normalized="${EXTRA_VARS//;/$'\n'}"
+    # Escapes: "\," and "\;" keep a literal comma/semicolon inside a value.
+    local esc_comma=$'\x01' esc_semi=$'\x02'
+    normalized="${EXTRA_VARS//\\,/$esc_comma}"
+    normalized="${normalized//\\;/$esc_semi}"
+    normalized="${normalized//;/$'\n'}"
     normalized="${normalized//,/$'\n'}"
 
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -30,6 +34,8 @@ parse_extra_vars() {
         value="${line#*=}"
         name="$(_extra_vars_trim "$name")"
         value="$(_extra_vars_trim "$value")"
+        value="${value//$esc_comma/,}"
+        value="${value//$esc_semi/;}"
 
         if [[ -z "$name" ]]; then
             echo "ERROR: malformed EXTRA_VARS entry (empty variable name): '$line'" >&2

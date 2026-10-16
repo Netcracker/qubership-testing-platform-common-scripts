@@ -20,7 +20,7 @@ render_environment_configuration() {
         return 0
     fi
 
-    echo "🔄 Environment configuration template found. Starting environment systems rendering..."
+    echo "🔄 Environment configuration template found $template_path. Starting environment systems rendering..."
 
     template_content="$(cat "$template_path")"
 
