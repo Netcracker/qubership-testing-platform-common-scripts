@@ -2,6 +2,13 @@
 
 # Event-based upload monitoring module
 start_upload_monitoring() {
+    # Storage not configured (local run): keep results in TMP_DIR, no uploaders
+    if ! storage_enabled; then
+        mkdir -p "$TMP_DIR/allure-results" "$TMP_DIR/attachments"
+        echo "ℹ️ Skipping upload monitoring: S3 storage is not configured"
+        return 0
+    fi
+
     echo "📡 Starting event-based upload monitoring..."
     
     # Prepare common S3 paths
@@ -114,6 +121,15 @@ sync_directory_to_s3() {
 
 # Finalize upload after tests
 finalize_upload() {
+    # Storage not configured (local run): nothing to upload, keep results locally
+    if ! storage_enabled; then
+        echo "ℹ️ S3 storage is not configured: skipping upload. Results are kept locally:"
+        echo "   Allure results: ${TMP_DIR}/allure-results"
+        echo "   Attachments:    ${TMP_DIR}/attachments"
+        final_cleanup
+        return 0
+    fi
+
     echo "🔄 Finalizing upload operations..."
     
     # Prepare common S3 paths

@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Returns 0 when S3/MinIO upload is configured. Storage is considered enabled only
+# when all of the required ATP_STORAGE_* variables are set (non-empty).
+storage_enabled() {
+    [[ -n "${ATP_STORAGE_USERNAME:-}" \
+        && -n "${ATP_STORAGE_PASSWORD:-}" \
+        && -n "${ATP_STORAGE_SERVER_URL:-}" \
+        && -n "${ATP_STORAGE_BUCKET:-}" ]]
+}
+
 # Environment initialization module
 init_environment() {
     echo "🔧 Initializing environment..."
@@ -12,27 +21,28 @@ init_environment() {
         CURRENT_TIME=$(date +%H-%M-%S)  # e.g., 11-48-00
     fi
 
-    # Configure AWS S3 parameters (required) - using local variables for security
-    if [[ -z "${ATP_STORAGE_USERNAME}" ]]; then
-        echo "❌ ATP_STORAGE_USERNAME is required but not set"
-        return 1
-    fi
-    if [[ -z "${ATP_STORAGE_PASSWORD}" ]]; then
-        echo "❌ ATP_STORAGE_PASSWORD is required but not set"
-        return 1
-    fi
-    
-    # Store credentials in local variables (not exported to environment)
-    _LOCAL_S3_KEY="$ATP_STORAGE_USERNAME"
-    _LOCAL_S3_SECRET="$ATP_STORAGE_PASSWORD"
-    export AWS_ACCESS_KEY_ID="$_LOCAL_S3_KEY"
-    export AWS_SECRET_ACCESS_KEY="$_LOCAL_S3_SECRET"
+    # ENVIRONMENT_NAME is only a label in S3 paths/reports; default it for local runs
+    export ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-local}"
 
-    # Configure additional s5cmd settings for MinIO only
-    if [[ "${ATP_STORAGE_PROVIDER}" == "minio" || "${ATP_STORAGE_PROVIDER}" == "s3" ]]; then
-        export AWS_ENDPOINT_URL="${ATP_STORAGE_SERVER_URL}"
-        export AWS_REGION="${ATP_STORAGE_REGION}"             # Required by s5cmd even for MinIO
-        export AWS_NO_VERIFY_SSL="true"           # Optional: disable SSL verification
+    if storage_enabled; then
+        export ATP_STORAGE_ENABLED=true
+        export ATP_STORAGE_PROVIDER="${ATP_STORAGE_PROVIDER:-minio}"
+
+        # Store credentials in local variables (not exported to environment)
+        _LOCAL_S3_KEY="$ATP_STORAGE_USERNAME"
+        _LOCAL_S3_SECRET="$ATP_STORAGE_PASSWORD"
+        export AWS_ACCESS_KEY_ID="$_LOCAL_S3_KEY"
+        export AWS_SECRET_ACCESS_KEY="$_LOCAL_S3_SECRET"
+
+        # Configure additional s5cmd settings for MinIO only
+        if [[ "${ATP_STORAGE_PROVIDER}" == "minio" || "${ATP_STORAGE_PROVIDER}" == "s3" ]]; then
+            export AWS_ENDPOINT_URL="${ATP_STORAGE_SERVER_URL}"
+            export AWS_REGION="${ATP_STORAGE_REGION:-}"           # Required by s5cmd even for MinIO
+            export AWS_NO_VERIFY_SSL="true"           # Optional: disable SSL verification
+        fi
+    else
+        export ATP_STORAGE_ENABLED=false
+        echo "ℹ️ S3 storage is not configured (ATP_STORAGE_USERNAME/PASSWORD/SERVER_URL/BUCKET). Upload is disabled; results stay in the local temp directory."
     fi
 
     # Define temp clone path
