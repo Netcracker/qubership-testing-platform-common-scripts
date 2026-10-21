@@ -121,8 +121,10 @@ sync_directory_to_s3() {
 
 # Finalize upload after tests
 finalize_upload() {
-    # Storage not configured (local run): nothing to upload, keep results locally
-    if ! storage_enabled; then
+    # Storage not configured (local run): nothing to upload, keep results locally.
+    # Use the flag computed in init_environment: storage_enabled() would always be
+    # false here because clear_sensitive_vars already unset the credentials.
+    if [[ "${ATP_STORAGE_ENABLED:-false}" != "true" ]]; then
         echo "ℹ️ S3 storage is not configured: skipping upload. Results are kept locally:"
         echo "   Allure results: ${TMP_DIR}/allure-results"
         echo "   Attachments:    ${TMP_DIR}/attachments"
