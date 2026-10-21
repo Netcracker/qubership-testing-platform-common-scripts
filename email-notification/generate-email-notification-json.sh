@@ -78,7 +78,7 @@ generate_email_notification_json() {
     if [[ "${ATP_REPORT_VIEW_UI_URL}" == Test\ not\ started* ]]; then
         ALLURE_REPORT_URL="${ATP_REPORT_VIEW_UI_URL}"
     else
-        ALLURE_REPORT_URL="${ATP_REPORT_VIEW_UI_URL}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/index.html"
+        ALLURE_REPORT_URL="${ATP_REPORT_VIEW_UI_URL}/Report/${RESULT_FOLDER_NAME:-${ENVIRONMENT_NAME}}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/index.html"
     fi
     TIMESTAMP="${TIMESTAMP:-$(date '+%Y-%m-%d %H:%M:%S UTC')}"
 

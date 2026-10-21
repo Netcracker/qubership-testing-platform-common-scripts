@@ -24,6 +24,13 @@ init_environment() {
     # ENVIRONMENT_NAME is only a label in S3 paths/reports; default it for local runs
     export ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-local}"
 
+    # Result folder in S3 is "<CLUSTER_NAME>_<ENVIRONMENT_NAME>", where CLUSTER_NAME is the
+    # first label of CLOUD_PUBLIC_HOST (e.g. dev1.domain.com -> dev1).
+    # Falls back to ENVIRONMENT_NAME alone when CLOUD_PUBLIC_HOST is not set.
+    CLUSTER_NAME="${CLOUD_PUBLIC_HOST%%.*}"
+    export CLUSTER_NAME
+    export RESULT_FOLDER_NAME="${CLUSTER_NAME:+${CLUSTER_NAME}_}${ENVIRONMENT_NAME}"
+
     if storage_enabled; then
         export ATP_STORAGE_ENABLED=true
         export ATP_STORAGE_PROVIDER="${ATP_STORAGE_PROVIDER:-minio}"
