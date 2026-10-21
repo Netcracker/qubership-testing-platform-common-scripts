@@ -18,6 +18,8 @@ fail() {
     echo "❌ FATAL: $error_message"
     echo "⚠️  Delegating cleanup to EXIT trap (finalize_once)."
     FAIL_MESSAGE="$error_message"
+    # Disk usage at failure time helps diagnose ephemeral-storage evictions.
+    declare -F log_disk_usage >/dev/null && log_disk_usage
     # Catched by EXIT trap and goes to finalize_once()
     exit 1
 }
