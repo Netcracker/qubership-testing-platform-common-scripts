@@ -12,8 +12,8 @@ start_upload_monitoring() {
     echo "📡 Starting event-based upload monitoring..."
     
     # Prepare common S3 paths
-    RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
-    REPORTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
+    RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${RESULT_FOLDER_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
+    REPORTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Report/${RESULT_FOLDER_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
     ATTACHMENTS_S3_PATH="${REPORTS_S3_PATH}attachments/"
 
     # Create attachments directory
@@ -135,8 +135,8 @@ finalize_upload() {
     echo "🔄 Finalizing upload operations..."
     
     # Prepare common S3 paths
-    RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
-    REPORTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
+    RESULTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Result/${RESULT_FOLDER_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
+    REPORTS_S3_PATH="s3://${ATP_STORAGE_BUCKET}/Report/${RESULT_FOLDER_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/"
     ATTACHMENTS_S3_PATH="${REPORTS_S3_PATH}attachments/"
 
     # Restore credentials for final operations
@@ -183,14 +183,14 @@ finalize_upload() {
 # Generate URLs for results
 generate_result_urls() {
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
-        RESULTS_URL="${ATP_STORAGE_BUCKET}.${ATP_STORAGE_SERVER_UI_URL}/Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
+        RESULTS_URL="${ATP_STORAGE_BUCKET}.${ATP_STORAGE_SERVER_UI_URL}/Result/${RESULT_FOLDER_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
     elif [[ "$ATP_STORAGE_PROVIDER" == "minio" || "$ATP_STORAGE_PROVIDER" == "s3" ]]; then
         # Generate base64-encoded URLs for MinIO UI
-        RESULTS_FOLDER_PATH="Result/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
+        RESULTS_FOLDER_PATH="Result/${RESULT_FOLDER_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results/"
         RESULTS_ENCODED_PATH=$(echo -n "${RESULTS_FOLDER_PATH}" | base64)
         RESULTS_URL="${ATP_STORAGE_SERVER_UI_URL}/browser/${ATP_STORAGE_BUCKET}/${RESULTS_ENCODED_PATH}"
 
-        REPORTS_FOLDER_PATH="Report/${ENVIRONMENT_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/"
+        REPORTS_FOLDER_PATH="Report/${RESULT_FOLDER_NAME}/${CURRENT_DATE}/${CURRENT_TIME}/allure-report/"
         REPORTS_ENCODED_PATH=$(echo -n "${REPORTS_FOLDER_PATH}" | base64)
         REPORTS_URL="${ATP_STORAGE_SERVER_UI_URL}/browser/${ATP_STORAGE_BUCKET}/${REPORTS_ENCODED_PATH}"
     fi
