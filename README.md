@@ -149,7 +149,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 - `ATP_STORAGE_USERNAME` - S3 access key
 - `ATP_STORAGE_PASSWORD` - S3 secret key
 - `ENVIRONMENT_NAME` - Environment name
-- `CLOUD_PUBLIC_HOST` - Cloud public host. The first label is used as the cluster name, and the S3 result/report folder is `<CLUSTER_NAME>_<ENVIRONMENT_NAME>` (e.g. `atp3dev_dev`). If unset, the folder is just `<ENVIRONMENT_NAME>`
+- `ATP_ORCHESTRATOR_URL` - Orchestrator URL. The second label of the host is used as the cluster name, and the S3 result/report folder is `<CLUSTER_NAME>_<ENVIRONMENT_NAME>` (e.g. `atp3dev_dev`). If the cluster cannot be derived, the folder is just `<ENVIRONMENT_NAME>`
 - `ATP_STORAGE_PROVIDER` - Storage type (`aws` or `minio` or `s3`)
 
 ### Optional Variables
