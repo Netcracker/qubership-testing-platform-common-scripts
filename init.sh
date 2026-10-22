@@ -24,10 +24,17 @@ init_environment() {
     # ENVIRONMENT_NAME is only a label in S3 paths/reports; default it for local runs
     export ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-local}"
 
-    # Result folder in S3 is "<CLUSTER_NAME>_<ENVIRONMENT_NAME>", where CLUSTER_NAME is the
-    # first label of CLOUD_PUBLIC_HOST (e.g. dev1.domain.com -> dev1).
-    # Falls back to ENVIRONMENT_NAME alone when CLOUD_PUBLIC_HOST is not set.
-    CLUSTER_NAME="${CLOUD_PUBLIC_HOST%%.*}"
+    # Result folder in S3 is "<CLUSTER_NAME>_<ENVIRONMENT_NAME>". CLUSTER_NAME is the second
+    # label of the ATP_ORCHESTRATOR_URL host, e.g.
+    #   https://test.atp3dev.domain.com/ -> atp3dev
+    # Falls back to ENVIRONMENT_NAME alone when the cluster cannot be derived.
+    local orchestrator_host="${ATP_ORCHESTRATOR_URL:-}"
+    orchestrator_host="${orchestrator_host#*://}"   # drop scheme
+    orchestrator_host="${orchestrator_host%%/*}"    # drop path
+    orchestrator_host="${orchestrator_host%%:*}"    # drop port
+    local host_labels=()
+    IFS='.' read -ra host_labels <<< "$orchestrator_host"
+    CLUSTER_NAME="${host_labels[1]:-}"
     export CLUSTER_NAME
     export RESULT_FOLDER_NAME="${CLUSTER_NAME:+${CLUSTER_NAME}_}${ENVIRONMENT_NAME}"
 
