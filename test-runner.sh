@@ -51,12 +51,10 @@ run_tests() {
   elif [ -f "./start_tests.sh" ]; then
     echo "🚀 Running test suite..."
     chmod +x start_tests.sh
-    if [ "$TEST_TYPE" = "scope" ] || [ "$TEST_TYPE" = "test" ]; then
-      ./start_tests.sh 2>&1 | tee "${TMP_DIR:-/tmp}/test-execution.log"
-      TEST_EXIT_CODE=${PIPESTATUS[0]}
-    else
-      ./start_tests.sh || TEST_EXIT_CODE=$?
-    fi
+    # Always tee so the progress watcher can read "Running N tests" / "collected N items".
+    # PIPESTATUS[0] is the test script, not tee.
+    ./start_tests.sh 2>&1 | tee "${TMP_DIR:-/tmp}/test-execution.log"
+    TEST_EXIT_CODE=${PIPESTATUS[0]}
   else
     fail "❌ Invalid test type: $TEST_TYPE or start_tests.sh not found"
   fi
