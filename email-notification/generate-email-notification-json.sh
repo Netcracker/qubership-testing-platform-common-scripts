@@ -136,7 +136,8 @@ generate_email_notification_json() {
         local target_file="$1"
         local details_json="$2"
 
-        jq -n \
+        # test_details is passed on stdin. One --argjson value cannot exceed 128 KiB.
+        printf '%s' "$details_json" | jq \
             --arg overall_status "$TEST_OVERALL_STATUS" \
             --argjson pass_rate "$TEST_PASS_RATE" \
             --argjson pass_rate_rounded "$TEST_PASS_RATE_ROUNDED" \
@@ -151,7 +152,6 @@ generate_email_notification_json() {
             --arg environment_name "${ENVIRONMENT_NAME:-Unknown}" \
             --arg atp_report_view_ui_url "$ATP_REPORT_VIEW_UI_URL" \
             --arg allure_report_url "$ALLURE_REPORT_URL" \
-            --argjson test_details "$details_json" \
             --arg env_pass_rate "$TEST_PASS_RATE" \
             --arg env_pass_rate_rounded "$TEST_PASS_RATE_ROUNDED" \
             --arg env_total_count "$TEST_TOTAL_COUNT" \
@@ -180,7 +180,7 @@ generate_email_notification_json() {
                 atp_report_view_ui_url: $atp_report_view_ui_url,
                 allure_report_url: $allure_report_url
               },
-              test_details: $test_details,
+              test_details: .,
               environment_variables: {
                 TEST_PASS_RATE: $env_pass_rate,
                 TEST_PASS_RATE_ROUNDED: $env_pass_rate_rounded,
