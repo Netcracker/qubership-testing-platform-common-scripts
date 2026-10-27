@@ -85,11 +85,16 @@ generate_email_notification_json() {
     log_info "Building JSON structure..."
 
     # stream test_details from allure files; never round-trip TEST_DETAILS_STRING
-    local test_details_json=""
+    # Kept in a temp file: passing it via argv hits MAX_ARG_STRLEN (128KB) -> "Argument list too long"
+    local test_details_file
+    test_details_file="$(mktemp "$output_dir/test-details.XXXXXX")"
+    # shellcheck disable=SC2064
+    trap "rm -f '$test_details_file'" RETURN
+    echo '[]' > "$test_details_file"
     local test_details_rc=0
     local test_details_failed=false
     if [ -d "$allure_results_dir" ] && compgen -G "$allure_results_dir/*-result.json" > /dev/null 2>&1; then
-        test_details_json=$(
+        {
             find "$allure_results_dir" -maxdepth 1 -name '*-result.json' -print0 |
                 xargs -0 -r cat -- |
                 jq -s '[
@@ -122,19 +127,21 @@ generate_email_notification_json() {
                       )
                     }
                 ]'
-        ) || test_details_rc=$?
+        } > "$test_details_file.new" || test_details_rc=$?
+        if [ "$test_details_rc" -eq 0 ] && [ -s "$test_details_file.new" ]; then
+            mv "$test_details_file.new" "$test_details_file"
+        fi
+        rm -f "$test_details_file.new"
     fi
     if [ "$test_details_rc" -ne 0 ]; then
         log_error "Failed to build test_details from Allure results (jq exit $test_details_rc)"
         test_details_failed=true
-        test_details_json='[]'
-    elif [ -z "$test_details_json" ]; then
-        test_details_json='[]'
+        echo '[]' > "$test_details_file"
     fi
 
     write_email_notification_json() {
         local target_file="$1"
-        local details_json="$2"
+        local details_file="$2"
 
         jq -n \
             --arg overall_status "$TEST_OVERALL_STATUS" \
@@ -151,7 +158,7 @@ generate_email_notification_json() {
             --arg environment_name "${ENVIRONMENT_NAME:-Unknown}" \
             --arg atp_report_view_ui_url "$ATP_REPORT_VIEW_UI_URL" \
             --arg allure_report_url "$ALLURE_REPORT_URL" \
-            --argjson test_details "$details_json" \
+            --slurpfile test_details_arr "$details_file" \
             --arg env_pass_rate "$TEST_PASS_RATE" \
             --arg env_pass_rate_rounded "$TEST_PASS_RATE_ROUNDED" \
             --arg env_total_count "$TEST_TOTAL_COUNT" \
@@ -180,7 +187,7 @@ generate_email_notification_json() {
                 atp_report_view_ui_url: $atp_report_view_ui_url,
                 allure_report_url: $allure_report_url
               },
-              test_details: $test_details,
+              test_details: $test_details_arr[0],
               environment_variables: {
                 TEST_PASS_RATE: $env_pass_rate,
                 TEST_PASS_RATE_ROUNDED: $env_pass_rate_rounded,
@@ -307,7 +314,7 @@ generate_email_notification_json() {
         return 1
     fi
 
-    if ! write_email_notification_json "$output_file" "$test_details_json"; then
+    if ! write_email_notification_json "$output_file" "$test_details_file"; then
         log_error "jq failed while writing email notification JSON"
         write_minimal_failed_json "$output_file" "JSON generation failed" || true
         export JSON_FILE="$output_file"

@@ -142,6 +142,7 @@ finalize_upload() {
     # Restore credentials for final operations
     restore_aws_credentials
 
+    echo "🔄 Copying the remaining files to S3. Please wait..."
     # Final sync to ensure all files are captured
     if [[ "$ATP_STORAGE_PROVIDER" == "aws" ]]; then
         s5cmd --no-verify-ssl sync "$TMP_DIR/allure-results/" "${RESULTS_S3_PATH}allure-results/" > /dev/null
