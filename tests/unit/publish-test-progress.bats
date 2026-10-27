@@ -77,3 +77,21 @@ EOF
     [[ "$output" == *"ATP3_PROGRESS executed=2 total=2 passed=1 failed=1 skipped=0"* ]]
     [[ "$output" == *"ATP3_JOB_NAME is not set"* ]]
 }
+
+@test "capture total passes lines through and keeps the latest number" {
+    command -v awk >/dev/null || skip "awk is not installed"
+    printf 'noise\n\033[2mRunning \033[0m9\033[2m tests using \033[0m2 workers\ncollected 4 items\n' \
+        | _atp3_progress_capture_total >"$TMP_DIR/capture.out"
+    grep -q 'noise' "$TMP_DIR/capture.out"
+    [ "$(tr -cd '0-9' <"$TMP_DIR/atp3-expected-total")" = "4" ]
+}
+
+@test "final publish keeps readable results when one file is broken" {
+    _write_result one passed "a" 10
+    echo 'not-json' >"$TMP_DIR/allure-results/bad-result.json"
+    echo 2 >"$TMP_DIR/atp3-expected-total"
+    run publish_test_progress_final
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"ATP3_PROGRESS executed=1 total=2 passed=1 failed=0 skipped=0"* ]]
+    [[ "$output" == *"skipped unreadable result"* ]]
+}

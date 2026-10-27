@@ -20,31 +20,30 @@ _atp3_progress_lock_file() {
     printf '%s/atp3-progress.lock' "${TMP_DIR:-/tmp}"
 }
 
-# Newest attempt wins. Retries share historyId and must not add another test.
-_atp3_progress_ingest() {
-    local file="$1"
-    local -n _st="$2"
-    local -n _sp="$3"
-    local status history full uuid stop key prev
-
-    [[ -f "$file" ]] || return 0
-    if ! IFS=$'\t' read -r status history full uuid stop < <(
-        jq -r '[
+_atp3_progress_jq_row() {
+    printf '%s\n' '[
             (.status // "unknown"),
             (.historyId // "" | gsub("[\\t\\r\\n]"; " ")),
             (.fullName // "" | gsub("[\\t\\r\\n]"; " ")),
             (.uuid // "" | gsub("[\\t\\r\\n]"; " ")),
-            ((.stop // .start // 0) | tostring)
-        ] | @tsv' "$file" 2>/dev/null
-    ); then
-        echo "⚠️ ATP3_PROGRESS skipped unreadable result: $file" >&2
-        return 0
-    fi
+            ((.stop // .start // 0) | tostring),
+            (input_filename | gsub("[\\t\\r\\n]"; " "))
+        ] | @tsv'
+}
+
+# Newest attempt wins. Retries share historyId and must not add another test.
+# $7 and $8 are the names of the status and stop arrays.
+_atp3_progress_apply_row() {
+    local status="$1" history="$2" full="$3" uuid="$4" stop="$5" file="$6"
+    local -n _st="$7"
+    local -n _sp="$8"
+    local key prev
 
     key="$history"
     [[ -z "$key" ]] && key="$full"
     [[ -z "$key" ]] && key="$uuid"
     [[ -z "$key" ]] && key="$file"
+    [[ -z "$key" ]] && return 0
 
     prev="${_sp[$key]:-}"
     if [[ -n "$prev" ]] && awk -v prev="$prev" -v cur="$stop" 'BEGIN { exit !(prev+0 > cur+0) }'; then
@@ -52,6 +51,92 @@ _atp3_progress_ingest() {
     fi
     _sp["$key"]="$stop"
     _st["$key"]="$status"
+}
+
+_atp3_progress_ingest() {
+    local file="$1"
+    local status history full uuid stop name
+
+    [[ -f "$file" ]] || return 0
+    if ! IFS=$'\t' read -r status history full uuid stop name < <(
+        jq -r "$(_atp3_progress_jq_row)" "$file" 2>/dev/null
+    ); then
+        echo "⚠️ ATP3_PROGRESS skipped unreadable result: $file" >&2
+        return 0
+    fi
+    _atp3_progress_apply_row "$status" "$history" "$full" "$uuid" "$stop" "${name:-$file}" "$2" "$3"
+}
+
+# One jq for a batch. A broken file fails the batch, then each file is read alone.
+_atp3_progress_ingest_batch() {
+    local st_name="$1" sp_name="$2"
+    local tsv status history full uuid stop name file
+    shift 2
+    [[ "$#" -gt 0 ]] || return 0
+
+    if ! tsv="$(jq -r "$(_atp3_progress_jq_row)" "$@" 2>/dev/null)"; then
+        for file in "$@"; do
+            _atp3_progress_ingest "$file" "$st_name" "$sp_name"
+        done
+        return 0
+    fi
+    while IFS=$'\t' read -r status history full uuid stop name || [[ -n "${status:-}${name:-}" ]]; do
+        if [[ -n "$status" || -n "$name" ]]; then
+            _atp3_progress_apply_row "$status" "$history" "$full" "$uuid" "$stop" "$name" "$st_name" "$sp_name"
+        fi
+        status=""
+        name=""
+    done <<<"$tsv"
+    return 0
+}
+
+_atp3_progress_ingest_dir() {
+    local dir="$1" st_name="$2" sp_name="$3"
+    local -a batch=()
+    local f
+
+    [[ -d "$dir" ]] || return 0
+    shopt -s nullglob
+    for f in "$dir"/*-result.json; do
+        batch+=("$f")
+        if [[ "${#batch[@]}" -ge 100 ]]; then
+            _atp3_progress_ingest_batch "$st_name" "$sp_name" "${batch[@]}"
+            batch=()
+        fi
+    done
+    shopt -u nullglob
+    if [[ "${#batch[@]}" -gt 0 ]]; then
+        _atp3_progress_ingest_batch "$st_name" "$sp_name" "${batch[@]}"
+    fi
+}
+
+# Copy the test output to stdout and keep only the latest expected total.
+_atp3_progress_capture_total() {
+    local dest="${TMP_DIR:-/tmp}/atp3-expected-total"
+    if ! command -v awk >/dev/null 2>&1; then
+        cat
+        return 0
+    fi
+    awk -v dest="$dest" '
+    {
+        print
+        fflush()
+        line = $0
+        gsub(/\033\[[0-9;]*m/, "", line)
+        n = ""
+        if (match(line, /Running[[:space:]]+[0-9]+[[:space:]]+tests?[[:space:]]+using/)) {
+            n = substr(line, RSTART, RLENGTH)
+            gsub(/[^0-9]/, "", n)
+        } else if (match(line, /collected[[:space:]]+[0-9]+[[:space:]]+items?/)) {
+            n = substr(line, RSTART, RLENGTH)
+            gsub(/[^0-9]/, "", n)
+        }
+        if (n != "") {
+            print n > dest
+            close(dest)
+        }
+    }
+    '
 }
 
 # Sets ATP3_PASSED, ATP3_FAILED, ATP3_SKIPPED, ATP3_EXECUTED.
@@ -288,7 +373,7 @@ start_test_progress_watch() {
 # One full pass after the suite finishes. Stops the live watch first so a
 # stale in-memory index cannot overwrite this snapshot.
 publish_test_progress_final() {
-    local dir f
+    local dir
     local -A status_by_key=()
     local -A stop_by_key=()
 
@@ -302,11 +387,7 @@ publish_test_progress_final() {
 
     dir="${TMP_DIR}/allure-results"
     [[ -d "$dir" ]] || return 0
-    shopt -s nullglob
-    for f in "$dir"/*-result.json; do
-        _atp3_progress_ingest "$f" status_by_key stop_by_key
-    done
-    shopt -u nullglob
+    _atp3_progress_ingest_dir "$dir" status_by_key stop_by_key
 
     _atp3_progress_publish_locked 1 || true
 }

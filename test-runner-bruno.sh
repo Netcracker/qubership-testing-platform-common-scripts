@@ -45,6 +45,10 @@ run_bruno_from_test_params() {
   PATH_TO_ALLURE_RESULTS="${TMP_DIR}/allure-results"
   rm -rf "$PATH_TO_ATTACHMENTS_DIR" "$PATH_TO_ALLURE_RESULTS"
   mkdir -p "$PATH_TO_ATTACHMENTS_DIR" "$PATH_TO_ALLURE_RESULTS"
+  # The directory was removed after the first watch; hang inotify on the new inode.
+  if declare -F start_test_progress_watch >/dev/null 2>&1; then
+    start_test_progress_watch || true
+  fi
   : > "$TMP_DIR/tests_count.csv"
 
   # Single pass: write environment.properties AND export matching vars to subprocesses.
