@@ -74,7 +74,7 @@ EOF
     run publish_test_progress_final
     [ "$status" -eq 0 ]
     # bats joins stdout and stderr. Without ATP3_JOB_NAME the annotation step logs a skip.
-    [[ "$output" == *"ATP3_PROGRESS executed=2 total=2 passed=1 failed=1 skipped=0"* ]]
+    [[ "$output" == *"📈 [ATP3_PROGRESS] 2/2 passed=1 failed=1 skipped=0"* ]]
     [[ "$output" == *"ATP3_JOB_NAME is not set"* ]]
 }
 
@@ -92,6 +92,6 @@ EOF
     echo 2 >"$TMP_DIR/atp3-expected-total"
     run publish_test_progress_final
     [ "$status" -eq 0 ]
-    [[ "$output" == *"ATP3_PROGRESS executed=1 total=2 passed=1 failed=0 skipped=0"* ]]
+    [[ "$output" == *"📈 [ATP3_PROGRESS] 1/2 passed=1 failed=0 skipped=0"* ]]
     [[ "$output" == *"skipped unreadable result"* ]]
 }

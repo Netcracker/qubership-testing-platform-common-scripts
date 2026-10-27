@@ -4,7 +4,7 @@
 #
 # The watch reads each new result file once and keeps a small index keyed by
 # historyId (then fullName, then uuid). The whole directory is read only from
-# publish_test_progress_final. Counts are printed as ATP3_PROGRESS and, when
+# publish_test_progress_final. Counts are printed as [ATP3_PROGRESS] executed/total and, when
 # ATP3_JOB_NAME is set, patched onto the Job annotation atp3.io/test-progress.
 #
 # A missing Job name, token, or API is logged and ignored. Test execution
@@ -262,7 +262,7 @@ _atp3_progress_patch_annotation() {
 # final=1 raises total up to executed when the expected count was short.
 _atp3_progress_emit() {
     local final="${2:-0}"
-    local total summary total_log
+    local total summary
 
     _atp3_progress_count "$1"
     total="$(_atp3_progress_detect_total || true)"
@@ -271,13 +271,11 @@ _atp3_progress_emit() {
     fi
     if [[ -n "$total" ]]; then
         summary="${ATP3_EXECUTED}/${total}"
-        total_log="$total"
     else
         summary="${ATP3_EXECUTED}/?"
-        total_log="-"
     fi
 
-    echo "ATP3_PROGRESS executed=${ATP3_EXECUTED} total=${total_log} passed=${ATP3_PASSED} failed=${ATP3_FAILED} skipped=${ATP3_SKIPPED}"
+    echo "📈 [ATP3_PROGRESS] ${summary} passed=${ATP3_PASSED} failed=${ATP3_FAILED} skipped=${ATP3_SKIPPED}"
     _atp3_progress_patch_annotation \
         "$ATP3_EXECUTED" "$ATP3_PASSED" "$ATP3_FAILED" "$ATP3_SKIPPED" "$total" "$summary" || true
 }
