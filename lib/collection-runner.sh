@@ -253,8 +253,19 @@ wait_for_collection_slot() {
 #                BRUNO_TAGS_CLI, COLLECTION_TIMEOUT, PROJECT_ID,
 #                RUN_ID (B3 trace propagation, see compose_b3_trace_id in tools/b3_trace.sh)
 # ---------------------------------------------------------------------------
+# One file per finished collection. The progress publisher counts these files.
+_atp3_mark_collection_done() {
+  local name="$1"
+  local dir="${TMP_DIR:-}/atp3-collections-done"
+  [ -n "${TMP_DIR:-}" ] && [ -n "$name" ] || return 0
+  mkdir -p "$dir" 2>/dev/null || return 0
+  : > "${dir}/${name}"
+}
+
 run_collection_body() {
   local collection_dir="$1"
+  local collection_file_slug
+  collection_file_slug=$(bruno_collection_file_slug "$collection_dir")
   local collection_path="${PROJECT_DIR:-$TMP_DIR}/${collection_dir}"
   local collection_path_in_collections="${PROJECT_DIR:-$TMP_DIR}/collections/${collection_dir}"
 
@@ -269,6 +280,7 @@ run_collection_body() {
 
   if [ ! -d "$collection_path" ] && [ ! -d "$collection_path_in_collections" ]; then
     echo "❌ Collection not found: $collection_path or $collection_path_in_collections — skipping"
+    _atp3_mark_collection_done "$collection_file_slug"
     write_allure_placeholder \
       "skipped" \
       "Collection: $(bruno_collection_display_name "$collection_dir")" \
@@ -277,9 +289,8 @@ run_collection_body() {
     return 0
   fi
 
-  local collection_name collection_file_slug
+  local collection_name
   collection_name=$(bruno_collection_display_name "$collection_dir")
-  collection_file_slug=$(bruno_collection_file_slug "$collection_dir")
   local bruno_report_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_file_slug}-result.json"
   local raw_log_path="${PATH_TO_ATTACHMENTS_DIR}/${collection_file_slug}.raw.log"
 
@@ -287,7 +298,10 @@ run_collection_body() {
   collection_start_ts=$(date +%s)
   echo "🚀 START collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
 
-  pushd "$collection_path" > /dev/null || return 1
+  pushd "$collection_path" > /dev/null || {
+    _atp3_mark_collection_done "$collection_file_slug"
+    return 1
+  }
   # Remember the collection root: popd below changes $PWD before conversion.
   local collection_root="$PWD"
 
@@ -343,7 +357,11 @@ run_collection_body() {
   elif [ "${#RESOLVED_FOLDERS[@]}" -eq 0 ]; then
     # Folder-filter requested but nothing matched — skip with a placeholder
     echo "❌ No matching folders found — skipping collection"
-    popd > /dev/null || return 1
+    popd > /dev/null || {
+      _atp3_mark_collection_done "$collection_file_slug"
+      return 1
+    }
+    _atp3_mark_collection_done "$collection_file_slug"
     write_allure_placeholder \
       "skipped" \
       "Collection: ${collection_name}" \
@@ -373,11 +391,17 @@ run_collection_body() {
     echo "🏁 BRUNO RUN END collection=${collection_name} pid=$$ time=$(date '+%H:%M:%S')"
   fi
 
-  popd > /dev/null || return 1
+  popd > /dev/null || {
+    _atp3_mark_collection_done "$collection_file_slug"
+    return 1
+  }
 
   local collection_end_ts
   collection_end_ts=$(date +%s)
   echo "🏁 FINISHED collection=${collection_name} pid=$$ duration=$((collection_end_ts-collection_start_ts))s time=$(date '+%H:%M:%S')"
+
+  # Count the collection before any Allure file, so the progress watch sees it.
+  _atp3_mark_collection_done "$collection_file_slug"
 
   # Convert report or write a broken placeholder
   if [ "$skipped_empty" = true ]; then

@@ -163,6 +163,28 @@ _atp3_progress_count() {
     ATP3_EXECUTED=$((ATP3_PASSED + ATP3_FAILED + ATP3_SKIPPED))
 }
 
+# Bruno writes this file. When it is present, executed/total/summary count
+# collections and passed/failed/skipped still count tests.
+_atp3_progress_collection_total() {
+    local f="${TMP_DIR:-}/atp3-collections-total"
+    local n=""
+
+    [[ -f "$f" ]] || return 0
+    n="$(tr -cd '0-9' <"$f" || true)"
+    [[ -n "$n" ]] && printf '%s' "$n"
+}
+
+_atp3_progress_collection_executed() {
+    local dir="${TMP_DIR:-}/atp3-collections-done"
+    local -a marks=()
+
+    [[ -d "$dir" ]] || { printf '0'; return 0; }
+    shopt -s nullglob
+    marks=("$dir"/*)
+    shopt -u nullglob
+    printf '%s' "${#marks[@]}"
+}
+
 # Prints the expected total, or nothing when it is not known yet.
 _atp3_progress_detect_total() {
     local expected="${TMP_DIR:-}/atp3-expected-total"
@@ -259,25 +281,35 @@ _atp3_progress_patch_annotation() {
     return 0
 }
 
-# final=1 raises total up to executed when the expected count was short.
+# final=1 raises a short test total up to the number of result files.
+# Bruno collection totals are left as they are.
 _atp3_progress_emit() {
     local final="${2:-0}"
-    local total summary
+    local total summary report_executed report_total
 
     _atp3_progress_count "$1"
-    total="$(_atp3_progress_detect_total || true)"
-    if [[ "$final" == "1" && -n "$total" && "$ATP3_EXECUTED" -gt "$total" ]]; then
-        total="$ATP3_EXECUTED"
-    fi
-    if [[ -n "$total" ]]; then
-        summary="${ATP3_EXECUTED}/${total}"
+    report_total="$(_atp3_progress_collection_total || true)"
+    if [[ -n "$report_total" ]]; then
+        report_executed="$(_atp3_progress_collection_executed)"
+        summary="${report_executed}/${report_total}"
     else
-        summary="${ATP3_EXECUTED}/?"
+        total="$(_atp3_progress_detect_total || true)"
+        if [[ "$final" == "1" && -n "$total" && "$ATP3_EXECUTED" -gt "$total" ]]; then
+            total="$ATP3_EXECUTED"
+        fi
+        report_executed="$ATP3_EXECUTED"
+        if [[ -n "$total" ]]; then
+            summary="${ATP3_EXECUTED}/${total}"
+            report_total="$total"
+        else
+            summary="${ATP3_EXECUTED}/?"
+            report_total=""
+        fi
     fi
 
     echo "📈 [ATP3_PROGRESS] ${summary} passed=${ATP3_PASSED} failed=${ATP3_FAILED} skipped=${ATP3_SKIPPED}"
     _atp3_progress_patch_annotation \
-        "$ATP3_EXECUTED" "$ATP3_PASSED" "$ATP3_FAILED" "$ATP3_SKIPPED" "$total" "$summary" || true
+        "$report_executed" "$ATP3_PASSED" "$ATP3_FAILED" "$ATP3_SKIPPED" "$report_total" "$summary" || true
 }
 
 _atp3_progress_publish_locked() {

@@ -68,7 +68,7 @@ run_bruno_from_test_params() {
 
   # Export everything the subprocess needs (arrays can't cross fork; serialise folders).
   export -f run_collection_body resolve_folders list_bru_run_targets run_bru write_allure_placeholder wait_for_collection_slot \
-    bruno_collection_display_name bruno_collection_file_slug
+    bruno_collection_display_name bruno_collection_file_slug _atp3_mark_collection_done
   export -f compose_b3_trace_id generate_b3_testcase_id generate_b3_span_id _b3_random_hex
 
   export TMP_DIR PROJECT_DIR PATH_TO_ATTACHMENTS_DIR PATH_TO_ALLURE_RESULTS
@@ -86,6 +86,8 @@ run_bruno_from_test_params() {
   echo "Collections to run:"
   printf "  %s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
   echo "Total: ${#BRUNO_COLLECTIONS_ARRAY[@]}  parallelism=${parallelism}"
+  printf '%s\n' "${#BRUNO_COLLECTIONS_ARRAY[@]}" > "${TMP_DIR}/atp3-collections-total"
+  mkdir -p "${TMP_DIR}/atp3-collections-done"
   if [ -n "${BRUNO_TAGS_CLI}" ]; then
     echo "Tags: ${BRUNO_TAGS_CLI}"
   fi
