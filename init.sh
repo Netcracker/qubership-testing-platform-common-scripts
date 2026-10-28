@@ -24,26 +24,18 @@ init_environment() {
     # ENVIRONMENT_NAME is only a label in S3 paths/reports; default it for local runs
     export ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-local}"
 
-    # Result folder in S3 is "<CLUSTER_NAME><ENVIRONMENT_NAME>", where CLUSTER_NAME carries its
-    # trailing underscore (e.g. "atp3dev_"). Two sources:
-    #   1) CLUSTER_NAME set in the environment: used as-is (the caller includes the underscore)
-    #   2) otherwise parsed from ATP_ORCHESTRATOR_URL: second host label plus "_", e.g.
-    #      https://atp3-orchestrator-dev1.atp3dev.managed.netcracker.cloud/ -> atp3dev_
-    # With neither source the folder is just <ENVIRONMENT_NAME> (legacy layout).
-    local cluster_prefix="${CLUSTER_NAME:-}"
-    if [[ -z "$cluster_prefix" ]]; then
-        local orchestrator_host="${ATP_ORCHESTRATOR_URL:-}"
-        orchestrator_host="${orchestrator_host#*://}"   # drop scheme
-        orchestrator_host="${orchestrator_host%%/*}"    # drop path
-        orchestrator_host="${orchestrator_host%%:*}"    # drop port
-        local host_labels=()
-        IFS='.' read -ra host_labels <<< "$orchestrator_host"
-        if [[ -n "${host_labels[1]:-}" ]]; then
-            cluster_prefix="${host_labels[1]}_"
+    # Result folder in S3: "<CLUSTER_NAME>-<ENVIRONMENT_NAME>" when CLUSTER_NAME is set,
+    # otherwise just "<ENVIRONMENT_NAME>". CLUSTER_NAME must not contain a dash, so the
+    # dash separator stays unambiguous.
+    if [[ -n "${CLUSTER_NAME:-}" ]]; then
+        if [[ "$CLUSTER_NAME" == *-* ]]; then
+            echo "❌ CLUSTER_NAME must not contain a dash: '$CLUSTER_NAME'" >&2
+            return 1
         fi
+        export RESULT_FOLDER_NAME="${CLUSTER_NAME}-${ENVIRONMENT_NAME}"
+    else
+        export RESULT_FOLDER_NAME="${ENVIRONMENT_NAME}"
     fi
-    export CLUSTER_NAME="$cluster_prefix"
-    export RESULT_FOLDER_NAME="${cluster_prefix}${ENVIRONMENT_NAME}"
 
     if storage_enabled; then
         export ATP_STORAGE_ENABLED=true
