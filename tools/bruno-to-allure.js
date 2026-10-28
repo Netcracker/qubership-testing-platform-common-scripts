@@ -3,7 +3,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { randomUUID } = require("node:crypto");
+const { randomUUID, createHash } = require("node:crypto");
 const { URL } = require("node:url");
 
 function splitPathParts(requestPath) {
@@ -191,11 +191,17 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName, c
     return 0;
   }
 
+  // Bruno report often has no per-request timestamp; lay requests out sequentially
+  // (ending "now") so retries get strictly increasing start times and Allure picks the last one.
+  const durationOf = t => t.response?.responseTime ?? t.duration ?? 0;
+  let cursor = Date.now() - results.reduce((sum, t) => sum + durationOf(t) + 1, 0);
+
   let count = 0;
   for (const test of results) {
     const id = randomUUID();
-    const timestamp = test.timestamp ? new Date(test.timestamp).getTime() : Date.now();
-    const duration = test.response?.responseTime ?? test.duration ?? 0;
+    const duration = durationOf(test);
+    const timestamp = test.timestamp ? new Date(test.timestamp).getTime() : cursor;
+    cursor = Math.max(cursor, timestamp) + duration + 1;
 
     const parts = splitPathParts(test.path);
     const parentSuite = "Backend (Bruno)";
@@ -243,7 +249,7 @@ function convertBrunoReport(brunoReportPath, allureResultsDir, collectionName, c
 
     const allureResult = {
       uuid: id,
-      historyId: randomUUID(),
+      historyId: createHash("md5").update(`${packageName}.${test.name || "test"}`).digest("hex"),
       name: test.name || `${test.request?.method || "GET"} ${test.request?.url || ""}`,
       fullName: `${packageName}.${test.name || "test"}`,
       status: finalStatus,
