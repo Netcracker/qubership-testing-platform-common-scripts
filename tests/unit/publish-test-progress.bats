@@ -74,7 +74,7 @@ EOF
     run publish_test_progress_final
     [ "$status" -eq 0 ]
     # bats joins stdout and stderr. Without ATP3_JOB_NAME the annotation step logs a skip.
-    [[ "$output" == *"📈 [ATP3_PROGRESS] 2/2 passed=1 failed=1 skipped=0"* ]]
+    [[ "$output" == *"📈 [ATP3_PROGRESS] 2/2 tests: passed=1 failed=1 skipped=0"* ]]
     [[ "$output" == *"ATP3_JOB_NAME is not set"* ]]
 }
 
@@ -86,7 +86,7 @@ EOF
     [ "$(tr -cd '0-9' <"$TMP_DIR/atp3-expected-total")" = "4" ]
 }
 
-@test "bruno summary counts finished collections and keeps test passed/failed" {
+@test "bruno summary counts finished collections and keeps request passed/failed" {
     _write_result one passed "a" 10
     _write_result two failed "b" 10
     echo 3 >"$TMP_DIR/atp3-collections-total"
@@ -96,7 +96,7 @@ EOF
     : >"$TMP_DIR/atp3-collections-done/orchestrator"
     run publish_test_progress_final
     [ "$status" -eq 0 ]
-    [[ "$output" == *"📈 [ATP3_PROGRESS] 2/3 passed=1 failed=1 skipped=0"* ]]
+    [[ "$output" == *"📈 [ATP3_PROGRESS] 2/3 collections, requests: passed=1 failed=1 skipped=0"* ]]
 }
 
 @test "final publish keeps readable results when one file is broken" {
@@ -105,6 +105,6 @@ EOF
     echo 2 >"$TMP_DIR/atp3-expected-total"
     run publish_test_progress_final
     [ "$status" -eq 0 ]
-    [[ "$output" == *"📈 [ATP3_PROGRESS] 1/2 passed=1 failed=0 skipped=0"* ]]
+    [[ "$output" == *"📈 [ATP3_PROGRESS] 1/2 tests: passed=1 failed=0 skipped=0"* ]]
     [[ "$output" == *"skipped unreadable result"* ]]
 }

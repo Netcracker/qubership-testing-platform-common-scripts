@@ -4,8 +4,10 @@
 #
 # The watch reads each new result file once and keeps a small index keyed by
 # historyId (then fullName, then uuid). The whole directory is read only from
-# publish_test_progress_final. Counts are printed as [ATP3_PROGRESS] executed/total and, when
-# ATP3_JOB_NAME is set, patched onto the Job annotation atp3.io/test-progress.
+# publish_test_progress_final. The annotation summary is the same text as the
+# log line, without the [ATP3_PROGRESS] prefix. executed, total, passed, failed
+# and skipped stay separate numbers. When ATP3_JOB_NAME is set, the summary is
+# patched onto atp3.io/test-progress.
 #
 # A missing Job name, token, or API is logged and ignored. Test execution
 # must not fail because progress could not be published.
@@ -285,13 +287,14 @@ _atp3_progress_patch_annotation() {
 # Bruno collection totals are left as they are.
 _atp3_progress_emit() {
     local final="${2:-0}"
-    local total summary report_executed report_total
+    local total summary report_executed report_total counts
 
     _atp3_progress_count "$1"
+    counts="passed=${ATP3_PASSED} failed=${ATP3_FAILED} skipped=${ATP3_SKIPPED}"
     report_total="$(_atp3_progress_collection_total || true)"
     if [[ -n "$report_total" ]]; then
         report_executed="$(_atp3_progress_collection_executed)"
-        summary="${report_executed}/${report_total}"
+        summary="${report_executed}/${report_total} collections, requests: ${counts}"
     else
         total="$(_atp3_progress_detect_total || true)"
         if [[ "$final" == "1" && -n "$total" && "$ATP3_EXECUTED" -gt "$total" ]]; then
@@ -299,15 +302,14 @@ _atp3_progress_emit() {
         fi
         report_executed="$ATP3_EXECUTED"
         if [[ -n "$total" ]]; then
-            summary="${ATP3_EXECUTED}/${total}"
+            summary="${ATP3_EXECUTED}/${total} tests: ${counts}"
             report_total="$total"
         else
-            summary="${ATP3_EXECUTED}/?"
+            summary="${ATP3_EXECUTED}/? tests: ${counts}"
             report_total=""
         fi
     fi
-
-    echo "📈 [ATP3_PROGRESS] ${summary} passed=${ATP3_PASSED} failed=${ATP3_FAILED} skipped=${ATP3_SKIPPED}"
+    echo "📈 [ATP3_PROGRESS] ${summary}"
     _atp3_progress_patch_annotation \
         "$report_executed" "$ATP3_PASSED" "$ATP3_FAILED" "$ATP3_SKIPPED" "$report_total" "$summary" || true
 }
