@@ -19,6 +19,7 @@ The test execution process is divided into modular components that can be easily
 - **`test-runner.sh`** - Test execution and results collection (clears sensitive vars)
 - **`upload-monitor.sh`** - Event-based upload monitoring and finalization
 - **`native-report.sh`** - Save native runner report to attachments folder
+- **`disk-usage.sh`** - `log_disk_usage` prints `TMP_DIR` and `$HOME_EX` dot-folder sizes (used to tune ephemeral-storage)
 
 ### Runtime-Specific Modules
 
