@@ -54,8 +54,13 @@ run_tests() {
     if [ "$TEST_TYPE" = "scope" ] || [ "$TEST_TYPE" = "test" ]; then
       # Full log: detect-missed-tests.sh reads "Running N tests" from this file.
       # PIPESTATUS[0] is the test script, not tee.
-      ./start_tests.sh 2>&1 | tee "${TMP_DIR:-/tmp}/test-execution.log"
-      TEST_EXIT_CODE=${PIPESTATUS[0]}
+      if declare -F _atp3_progress_capture_total >/dev/null 2>&1; then
+        ./start_tests.sh 2>&1 | tee "${TMP_DIR:-/tmp}/test-execution.log" | _atp3_progress_capture_total
+        TEST_EXIT_CODE=${PIPESTATUS[0]}
+      else
+        ./start_tests.sh 2>&1 | tee "${TMP_DIR:-/tmp}/test-execution.log"
+        TEST_EXIT_CODE=${PIPESTATUS[0]}
+      fi
     elif declare -F _atp3_progress_capture_total >/dev/null 2>&1; then
       # Pass the output through and store only the expected total.
       ./start_tests.sh 2>&1 | _atp3_progress_capture_total

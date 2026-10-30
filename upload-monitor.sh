@@ -4,7 +4,7 @@
 
 _atp3_progress_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/publish-test-progress.sh"
 if [[ -f "$_atp3_progress_lib" ]]; then
-    # shellcheck disable=SC1091
+    # shellcheck disable=SC1090
     source "$_atp3_progress_lib"
 fi
 

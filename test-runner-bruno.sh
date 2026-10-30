@@ -45,6 +45,9 @@ run_bruno_from_test_params() {
   PATH_TO_ALLURE_RESULTS="${TMP_DIR}/allure-results"
   rm -rf "$PATH_TO_ATTACHMENTS_DIR" "$PATH_TO_ALLURE_RESULTS"
   mkdir -p "$PATH_TO_ATTACHMENTS_DIR" "$PATH_TO_ALLURE_RESULTS"
+  # Written before the watch starts, so it publishes 0/N collections right away.
+  printf '%s\n' "${#BRUNO_COLLECTIONS_ARRAY[@]}" > "${TMP_DIR}/atp3-collections-total"
+  mkdir -p "${TMP_DIR}/atp3-collections-done"
   # The directory was removed after the first watch; hang inotify on the new inode.
   if declare -F start_test_progress_watch >/dev/null 2>&1; then
     start_test_progress_watch || true
@@ -86,8 +89,6 @@ run_bruno_from_test_params() {
   echo "Collections to run:"
   printf "  %s\n" "${BRUNO_COLLECTIONS_ARRAY[@]}"
   echo "Total: ${#BRUNO_COLLECTIONS_ARRAY[@]}  parallelism=${parallelism}"
-  printf '%s\n' "${#BRUNO_COLLECTIONS_ARRAY[@]}" > "${TMP_DIR}/atp3-collections-total"
-  mkdir -p "${TMP_DIR}/atp3-collections-done"
   if [ -n "${BRUNO_TAGS_CLI}" ]; then
     echo "Tags: ${BRUNO_TAGS_CLI}"
   fi
@@ -108,7 +109,7 @@ run_bruno_from_test_params() {
     local cname
     cname=$(bruno_collection_file_slug "$collection")
     local prefix="[${cname}|${collection_index}/${total}]"
-    bash -c 'run_collection_body "$1"' _ "$collection" > >(sed "s#^#${prefix} #") 2>&1 &
+    ATP3_COLLECTION_INDEX="$collection_index" bash -c 'run_collection_body "$1"' _ "$collection" > >(sed "s#^#${prefix} #") 2>&1 &
     active_collection_pids+=("$!")
     running_jobs=$((running_jobs + 1))
 

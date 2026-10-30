@@ -6,8 +6,10 @@
 # historyId (then fullName, then uuid). The whole directory is read only from
 # publish_test_progress_final. The annotation summary is the same text as the
 # log line, without the [ATP3_PROGRESS] prefix. executed, total, passed, failed
-# and skipped stay separate numbers. When ATP3_JOB_NAME is set, the summary is
-# patched onto atp3.io/test-progress.
+# and skipped stay separate numbers. unit is "tests", or "collections" for
+# Bruno, where executed/total count collections and passed/failed/skipped
+# count requests. When ATP3_JOB_NAME is set, the summary is patched onto
+# atp3.io/test-progress, first as 0/N once the total is known.
 #
 # A missing Job name, token, or API is logged and ignored. Test execution
 # must not fail because progress could not be published.
@@ -22,15 +24,22 @@ _atp3_progress_lock_file() {
     printf '%s/atp3-progress.lock' "${TMP_DIR:-/tmp}"
 }
 
+# Set after a 401/403/404: the Job cannot be patched for the rest of the run.
+_atp3_progress_disabled_file() {
+    printf '%s/atp3-progress.disabled' "${TMP_DIR:-/tmp}"
+}
+
+# Fields are joined with \x1f, not a tab: tab is IFS whitespace, so read would
+# merge an empty historyId with the next field.
 _atp3_progress_jq_row() {
     printf '%s\n' '[
             (.status // "unknown"),
-            (.historyId // "" | gsub("[\\t\\r\\n]"; " ")),
-            (.fullName // "" | gsub("[\\t\\r\\n]"; " ")),
-            (.uuid // "" | gsub("[\\t\\r\\n]"; " ")),
-            ((.stop // .start // 0) | tostring),
-            (input_filename | gsub("[\\t\\r\\n]"; " "))
-        ] | @tsv'
+            (.historyId // ""),
+            (.fullName // ""),
+            (.uuid // ""),
+            (.stop // .start // 0),
+            input_filename
+        ] | map(tostring | gsub("[\u001f\r\n]"; " ")) | join("\u001f")'
 }
 
 # Newest attempt wins. Retries share historyId and must not add another test.
@@ -47,11 +56,13 @@ _atp3_progress_apply_row() {
     [[ -z "$key" ]] && key="$file"
     [[ -z "$key" ]] && return 0
 
+    [[ "$stop" =~ ^[0-9]+$ ]] || stop=0
     prev="${_sp[$key]:-}"
-    if [[ -n "$prev" ]] && awk -v prev="$prev" -v cur="$stop" 'BEGIN { exit !(prev+0 > cur+0) }'; then
+    if [[ -n "$prev" ]] && ((prev > stop)); then
         return 0
     fi
     _sp["$key"]="$stop"
+    # shellcheck disable=SC2034
     _st["$key"]="$status"
 }
 
@@ -60,7 +71,7 @@ _atp3_progress_ingest() {
     local status history full uuid stop name
 
     [[ -f "$file" ]] || return 0
-    if ! IFS=$'\t' read -r status history full uuid stop name < <(
+    if ! IFS=$'\x1f' read -r status history full uuid stop name < <(
         jq -r "$(_atp3_progress_jq_row)" "$file" 2>/dev/null
     ); then
         echo "⚠️ ATP3_PROGRESS skipped unreadable result: $file" >&2
@@ -82,7 +93,7 @@ _atp3_progress_ingest_batch() {
         done
         return 0
     fi
-    while IFS=$'\t' read -r status history full uuid stop name || [[ -n "${status:-}${name:-}" ]]; do
+    while IFS=$'\x1f' read -r status history full uuid stop name || [[ -n "${status:-}${name:-}" ]]; do
         if [[ -n "$status" || -n "$name" ]]; then
             _atp3_progress_apply_row "$status" "$history" "$full" "$uuid" "$stop" "$name" "$st_name" "$sp_name"
         fi
@@ -144,18 +155,18 @@ _atp3_progress_capture_total() {
 # Sets ATP3_PASSED, ATP3_FAILED, ATP3_SKIPPED, ATP3_EXECUTED.
 # broken and any other status count as failed.
 _atp3_progress_count() {
-    local -n _st="$1"
+    local -n _count_st="$1"
     local key status
 
     ATP3_PASSED=0
     ATP3_FAILED=0
     ATP3_SKIPPED=0
-    if ((${#_st[@]} == 0)); then
+    if ((${#_count_st[@]} == 0)); then
         ATP3_EXECUTED=0
         return 0
     fi
-    for key in "${!_st[@]}"; do
-        status="${_st[$key]}"
+    for key in "${!_count_st[@]}"; do
+        status="${_count_st[$key]}"
         case "$status" in
             passed) ATP3_PASSED=$((ATP3_PASSED + 1)) ;;
             skipped) ATP3_SKIPPED=$((ATP3_SKIPPED + 1)) ;;
@@ -187,36 +198,35 @@ _atp3_progress_collection_executed() {
     printf '%s' "${#marks[@]}"
 }
 
-# Prints the expected total, or nothing when it is not known yet.
+# Prints the expected total written by _atp3_progress_capture_total, or
+# nothing when it is not known yet.
 _atp3_progress_detect_total() {
     local expected="${TMP_DIR:-}/atp3-expected-total"
-    local log="${TMP_DIR:-}/test-execution.log"
-    local n="" line clean
+    local n=""
 
-    if [[ -f "$expected" ]]; then
-        n="$(tr -cd '0-9' <"$expected" || true)"
-        if [[ -n "$n" ]]; then
-            printf '%s' "$n"
-            return 0
-        fi
-    fi
-    [[ -f "$log" ]] || return 0
-
-    shopt -s extglob
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        clean="${line//$'\e'\[+([0-9;])m/}"
-        if [[ "$clean" =~ Running[[:space:]]+([0-9]+)[[:space:]]+tests?[[:space:]]+using ]]; then
-            n="${BASH_REMATCH[1]}"
-        elif [[ "$clean" =~ collected[[:space:]]+([0-9]+)[[:space:]]+items? ]]; then
-            n="${BASH_REMATCH[1]}"
-        fi
-    done <"$log"
+    [[ -f "$expected" ]] || return 0
+    n="$(tr -cd '0-9' <"$expected" || true)"
     [[ -n "$n" ]] && printf '%s' "$n"
 }
 
+# True once a Bruno collection total or a test total is on disk.
+# Uses read, not $(...): the watch calls this every couple of seconds.
+_atp3_progress_total_known() {
+    local f line
+    for f in "${TMP_DIR:-}/atp3-collections-total" "${TMP_DIR:-}/atp3-expected-total"; do
+        [[ -f "$f" ]] || continue
+        line=""
+        IFS= read -r line <"$f" || true
+        [[ "$line" == *[0-9]* ]] && return 0
+    done
+    return 1
+}
+
 _atp3_progress_patch_annotation() {
-    local executed="$1" passed="$2" failed="$3" skipped="$4" total="$5" summary="$6"
-    local ns token ca body code attempt job
+    local executed="$1" passed="$2" failed="$3" skipped="$4" total="$5" summary="$6" unit="$7"
+    local sa ns token ca body code job
+
+    [[ -f "$(_atp3_progress_disabled_file)" ]] && return 0
 
     job="${ATP3_JOB_NAME:-}"
     if [[ -z "$job" ]]; then
@@ -227,12 +237,13 @@ _atp3_progress_patch_annotation() {
         return 0
     fi
 
+    sa="${ATP3_SERVICE_ACCOUNT_DIR:-/var/run/secrets/kubernetes.io/serviceaccount}"
     ns="${ATP3_RUN_NAMESPACE:-}"
-    if [[ -z "$ns" && -r /var/run/secrets/kubernetes.io/serviceaccount/namespace ]]; then
-        ns="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+    if [[ -z "$ns" && -r "$sa/namespace" ]]; then
+        ns="$(cat "$sa/namespace")"
     fi
-    token="/var/run/secrets/kubernetes.io/serviceaccount/token"
-    ca="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+    token="$sa/token"
+    ca="$sa/ca.crt"
     if [[ -z "$ns" || ! -r "$token" || ! -r "$ca" ]]; then
         echo "⚠️ ATP3_PROGRESS annotation skipped: pod service account is not available" >&2
         return 0
@@ -242,26 +253,17 @@ _atp3_progress_patch_annotation() {
         return 0
     fi
 
-    if [[ -n "$total" ]]; then
-        body="$(jq -n \
-            --argjson executed "$executed" \
-            --argjson passed "$passed" \
-            --argjson failed "$failed" \
-            --argjson skipped "$skipped" \
-            --argjson total "$total" \
-            --arg summary "$summary" \
-            '{metadata:{annotations:{"atp3.io/test-progress": ({executed:$executed,total:$total,passed:$passed,failed:$failed,skipped:$skipped,summary:$summary} | tojson)}}}')" || return 0
-    else
-        body="$(jq -n \
-            --argjson executed "$executed" \
-            --argjson passed "$passed" \
-            --argjson failed "$failed" \
-            --argjson skipped "$skipped" \
-            --arg summary "$summary" \
-            '{metadata:{annotations:{"atp3.io/test-progress": ({executed:$executed,total:null,passed:$passed,failed:$failed,skipped:$skipped,summary:$summary} | tojson)}}}')" || return 0
-    fi
+    body="$(jq -n \
+        --argjson executed "$executed" \
+        --argjson passed "$passed" \
+        --argjson failed "$failed" \
+        --argjson skipped "$skipped" \
+        --argjson total "${total:-null}" \
+        --arg unit "$unit" \
+        --arg summary "$summary" \
+        '{metadata:{annotations:{"atp3.io/test-progress": ({executed:$executed,total:$total,unit:$unit,passed:$passed,failed:$failed,skipped:$skipped,summary:$summary} | tojson)}}}')" || return 0
 
-    for attempt in 1 2 3; do
+    for _ in 1 2 3; do
         code="$(curl -sS -o "${TMP_DIR:-/tmp}/atp3-progress-patch.out" -w '%{http_code}' \
             --cacert "$ca" \
             --connect-timeout 5 \
@@ -270,14 +272,18 @@ _atp3_progress_patch_annotation() {
             -H "Content-Type: application/merge-patch+json" \
             -X PATCH \
             --data "$body" \
-            "https://kubernetes.default.svc/apis/batch/v1/namespaces/${ns}/jobs/${job}" || echo "000")"
-        if [[ "$code" == "200" || "$code" == "201" ]]; then
-            return 0
-        fi
-        if [[ "$code" != "409" ]]; then
-            break
-        fi
-        sleep 1
+            "https://kubernetes.default.svc/apis/batch/v1/namespaces/${ns}/jobs/${job}")" || true
+        code="${code:-000}"
+        case "$code" in
+            200 | 201) return 0 ;;
+            409) sleep 1 ;;
+            401 | 403 | 404)
+                echo "⚠️ ATP3_PROGRESS annotation disabled for this run: patch of job ${job} returned HTTP ${code}" >&2
+                : >"$(_atp3_progress_disabled_file)" 2>/dev/null || true
+                return 0
+                ;;
+            *) break ;;
+        esac
     done
     echo "⚠️ ATP3_PROGRESS annotation patch failed (HTTP ${code})" >&2
     return 0
@@ -287,15 +293,17 @@ _atp3_progress_patch_annotation() {
 # Bruno collection totals are left as they are.
 _atp3_progress_emit() {
     local final="${2:-0}"
-    local total summary report_executed report_total counts
+    local total summary report_executed report_total counts unit
 
     _atp3_progress_count "$1"
     counts="passed=${ATP3_PASSED} failed=${ATP3_FAILED} skipped=${ATP3_SKIPPED}"
     report_total="$(_atp3_progress_collection_total || true)"
     if [[ -n "$report_total" ]]; then
+        unit="collections"
         report_executed="$(_atp3_progress_collection_executed)"
         summary="${report_executed}/${report_total} collections, requests: ${counts}"
     else
+        unit="tests"
         total="$(_atp3_progress_detect_total || true)"
         if [[ "$final" == "1" && -n "$total" && "$ATP3_EXECUTED" -gt "$total" ]]; then
             total="$ATP3_EXECUTED"
@@ -311,7 +319,7 @@ _atp3_progress_emit() {
     fi
     echo "📈 [ATP3_PROGRESS] ${summary}"
     _atp3_progress_patch_annotation \
-        "$report_executed" "$ATP3_PASSED" "$ATP3_FAILED" "$ATP3_SKIPPED" "$report_total" "$summary" || true
+        "$report_executed" "$ATP3_PASSED" "$ATP3_FAILED" "$ATP3_SKIPPED" "$report_total" "$summary" "$unit" || true
 }
 
 _atp3_progress_publish_locked() {
@@ -340,7 +348,7 @@ _atp3_progress_watch_loop() {
     local dir="${TMP_DIR}/allure-results"
     local -A status_by_key=()
     local -A stop_by_key=()
-    local fname pending=0 deadline=0 now wait_s inotify_pid="" fd="" read_rc=0
+    local fname pending=0 deadline=0 now wait_s inotify_pid="" fd="" read_rc=0 total_published=0
     local -a inotify_cmd
 
     mkdir -p "$dir"
@@ -356,6 +364,11 @@ _atp3_progress_watch_loop() {
     while true; do
         if [[ -f "$(_atp3_progress_stop_file)" ]]; then
             return 0
+        fi
+        # Publish 0/N as soon as N is known, before the first result file.
+        if [[ "$total_published" -eq 0 ]] && _atp3_progress_total_known; then
+            _atp3_progress_publish_locked 0 || true
+            total_published=1
         fi
         now="$(date +%s)"
         if [[ "$pending" -eq 1 && "$deadline" -gt 0 && "$now" -ge "$deadline" ]]; then
@@ -406,7 +419,10 @@ start_test_progress_watch() {
 # stale in-memory index cannot overwrite this snapshot.
 publish_test_progress_final() {
     local dir
+    # Read by name from _atp3_progress_ingest_dir and _atp3_progress_emit.
+    # shellcheck disable=SC2034
     local -A status_by_key=()
+    # shellcheck disable=SC2034
     local -A stop_by_key=()
 
     [[ -n "${TMP_DIR:-}" ]] || return 0

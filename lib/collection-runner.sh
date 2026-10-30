@@ -254,12 +254,13 @@ wait_for_collection_slot() {
 #                RUN_ID (B3 trace propagation, see compose_b3_trace_id in tools/b3_trace.sh)
 # ---------------------------------------------------------------------------
 # One file per finished collection. The progress publisher counts these files.
+# The dispatch index keeps two collections with the same slug from sharing a file.
 _atp3_mark_collection_done() {
   local name="$1"
   local dir="${TMP_DIR:-}/atp3-collections-done"
   [ -n "${TMP_DIR:-}" ] && [ -n "$name" ] || return 0
   mkdir -p "$dir" 2>/dev/null || return 0
-  : > "${dir}/${name}"
+  : > "${dir}/${ATP3_COLLECTION_INDEX:+${ATP3_COLLECTION_INDEX}-}${name}"
 }
 
 run_collection_body() {
