@@ -12,6 +12,7 @@ git-clone.sh | | _clear_git_insteadOf _finalize_clone _has_postman_collection _h
 init.sh | | init_environment
 native-report.sh | | save_native_report
 parse-extra-vars.sh | | _extra_vars_trim extract_test_type parse_extra_vars
+publish-test-progress.sh | | start_test_progress_watch publish_test_progress_final
 push-metrics.sh | | _metrics_auth_header _metrics_base_trim _metrics_build_url _metrics_dispatch _push_to_endpoint push_metrics
 push-metrics-start.sh | push-metrics.sh | push_metrics_start
 render-environment-configuration.sh | | render_environment_configuration

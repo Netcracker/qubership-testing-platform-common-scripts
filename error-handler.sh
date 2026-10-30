@@ -67,6 +67,16 @@ finalize_once() {
 
     generate_email_notification_json || true
 
+    if ! declare -F publish_test_progress_final >/dev/null 2>&1; then
+      local _progress_lib
+      _progress_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/publish-test-progress.sh"
+      if [[ -f "$_progress_lib" ]]; then
+        # shellcheck disable=SC1090
+        source "$_progress_lib"
+      fi
+    fi
+    publish_test_progress_final || true
+
     # Source runner-specific missed-test detector if provided.
     if [ -f "/app/detect-missed-tests.sh" ]; then
       # shellcheck disable=SC1091
