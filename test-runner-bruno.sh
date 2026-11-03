@@ -108,7 +108,7 @@ run_bruno_from_test_params() {
     local cname
     cname=$(bruno_collection_file_slug "$collection")
     local prefix="[${cname}|${collection_index}/${total}]"
-    bash -c 'run_collection_body "$1"' _ "$collection" > >(sed "s#^#${prefix} #") 2>&1 &
+    ATP3_COLLECTION_INDEX="$collection_index" bash -c 'run_collection_body "$1"' _ "$collection" > >(sed "s#^#${prefix} #") 2>&1 &
     active_collection_pids+=("$!")
     running_jobs=$((running_jobs + 1))
 

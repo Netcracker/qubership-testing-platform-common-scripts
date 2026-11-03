@@ -60,6 +60,26 @@ EOF
     [ "$ATP3_EXECUTED" -eq 2 ]
 }
 
+@test "empty historyId does not shift the stop column" {
+    declare -A status_by_key=()
+    declare -A stop_by_key=()
+    printf '{"status":"failed","historyId":"","fullName":"login","uuid":"a","stop":200}\n' \
+        >"$TMP_DIR/allure-results/newer-result.json"
+    printf '{"status":"passed","historyId":"","fullName":"login","uuid":"b","stop":100}\n' \
+        >"$TMP_DIR/allure-results/older-result.json"
+    _atp3_progress_ingest_dir "$TMP_DIR/allure-results" status_by_key stop_by_key
+    [ "${stop_by_key[login]}" = "200" ]
+    [ "${status_by_key[login]}" = "failed" ]
+}
+
+@test "collections with the same slug get separate done marks" {
+    # shellcheck source=lib/collection-runner.sh
+    source "$REPO_ROOT/lib/collection-runner.sh"
+    ATP3_COLLECTION_INDEX=1 _atp3_mark_collection_done "a_b"
+    ATP3_COLLECTION_INDEX=2 _atp3_mark_collection_done "a_b"
+    [ "$(_atp3_progress_collection_executed)" = "2" ]
+}
+
 @test "Running N tests is read from the execution log" {
     printf '\033[2mRunning \033[0m12\033[2m tests using \033[0m2 workers\n' >"$TMP_DIR/test-execution.log"
     run _atp3_progress_detect_total

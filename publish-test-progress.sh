@@ -22,15 +22,17 @@ _atp3_progress_lock_file() {
     printf '%s/atp3-progress.lock' "${TMP_DIR:-/tmp}"
 }
 
+# Fields are joined with \x1f, not a tab: tab is IFS whitespace, so read would
+# merge an empty historyId with the next field and shift stop.
 _atp3_progress_jq_row() {
     printf '%s\n' '[
             (.status // "unknown"),
-            (.historyId // "" | gsub("[\\t\\r\\n]"; " ")),
-            (.fullName // "" | gsub("[\\t\\r\\n]"; " ")),
-            (.uuid // "" | gsub("[\\t\\r\\n]"; " ")),
-            ((.stop // .start // 0) | tostring),
-            (input_filename | gsub("[\\t\\r\\n]"; " "))
-        ] | @tsv'
+            (.historyId // ""),
+            (.fullName // ""),
+            (.uuid // ""),
+            (.stop // .start // 0),
+            input_filename
+        ] | map(tostring | gsub("[\u001f\r\n]"; " ")) | join("\u001f")'
 }
 
 # Newest attempt wins. Retries share historyId and must not add another test.
@@ -60,7 +62,7 @@ _atp3_progress_ingest() {
     local status history full uuid stop name
 
     [[ -f "$file" ]] || return 0
-    if ! IFS=$'\t' read -r status history full uuid stop name < <(
+    if ! IFS=$'\x1f' read -r status history full uuid stop name < <(
         jq -r "$(_atp3_progress_jq_row)" "$file" 2>/dev/null
     ); then
         echo "⚠️ ATP3_PROGRESS skipped unreadable result: $file" >&2
@@ -82,7 +84,7 @@ _atp3_progress_ingest_batch() {
         done
         return 0
     fi
-    while IFS=$'\t' read -r status history full uuid stop name || [[ -n "${status:-}${name:-}" ]]; do
+    while IFS=$'\x1f' read -r status history full uuid stop name || [[ -n "${status:-}${name:-}" ]]; do
         if [[ -n "$status" || -n "$name" ]]; then
             _atp3_progress_apply_row "$status" "$history" "$full" "$uuid" "$stop" "$name" "$st_name" "$sp_name"
         fi
