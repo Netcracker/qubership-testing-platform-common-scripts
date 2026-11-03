@@ -157,7 +157,6 @@ run_bru() {
     "${BRU_BIN}/bru.js" run \
     ${BRUNO_FLAGS_CLI:-"--insecure"} \
     ${env_flag} \
-    ${global_env_flags} \
     ${tags_flag} \
     ${trace_flag} \
     --reporter-json "${report_path}" \
