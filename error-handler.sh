@@ -73,6 +73,17 @@ finalize_once() {
       source "/app/detect-missed-tests.sh" || true
     fi
 
+    # After the detector: its broken stubs must be in the final counts.
+    if ! declare -F publish_test_progress_final >/dev/null 2>&1; then
+      local _progress_lib
+      _progress_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/publish-test-progress.sh"
+      if [[ -f "$_progress_lib" ]]; then
+        # shellcheck disable=SC1090
+        source "$_progress_lib"
+      fi
+    fi
+    publish_test_progress_final || true
+
     push_metrics || true
     save_native_report "${PROJECT_DIR:-$TMP_DIR}/${NATIVE_REPORT_DIR:-playwright-report}" || true
     finalize_upload || true

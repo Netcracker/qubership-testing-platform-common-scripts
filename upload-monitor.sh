@@ -1,11 +1,21 @@
 #!/bin/bash
 
 # Event-based upload monitoring module
+
+_atp3_progress_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/publish-test-progress.sh"
+if [[ -f "$_atp3_progress_lib" ]]; then
+    # shellcheck disable=SC1091
+    source "$_atp3_progress_lib"
+fi
+
 start_upload_monitoring() {
     # Storage not configured (local run): keep results in TMP_DIR, no uploaders
     if ! storage_enabled; then
         mkdir -p "$TMP_DIR/allure-results" "$TMP_DIR/attachments"
         echo "ℹ️ Skipping upload monitoring: S3 storage is not configured"
+        if declare -F start_test_progress_watch >/dev/null 2>&1; then
+            start_test_progress_watch || true
+        fi
         return 0
     fi
 
@@ -36,6 +46,9 @@ start_upload_monitoring() {
     fi
     
     echo "✅ Upload monitoring started"
+    if declare -F start_test_progress_watch >/dev/null 2>&1; then
+        start_test_progress_watch || true
+    fi
 }
 
 # Inotify uploader function
