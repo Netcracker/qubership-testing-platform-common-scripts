@@ -12,6 +12,22 @@ init_environment() {
         CURRENT_TIME=$(date +%H-%M-%S)  # e.g., 11-48-00
     fi
 
+        # ENVIRONMENT_NAME is only a label in S3 paths/reports; default it for local runs
+        export ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-local}"
+
+        # Result folder in S3: "<CLUSTER_NAME>-<ENVIRONMENT_NAME>" when CLUSTER_NAME is set,
+        # otherwise just "<ENVIRONMENT_NAME>". CLUSTER_NAME must not contain a dash, so the
+        # dash separator stays unambiguous.
+        if [[ -n "${CLUSTER_NAME:-}" ]]; then
+            if [[ "$CLUSTER_NAME" == *-* ]]; then
+                echo "❌ CLUSTER_NAME must not contain a dash: '$CLUSTER_NAME'" >&2
+                return 1
+            fi
+            export RESULT_FOLDER_NAME="${CLUSTER_NAME}-${ENVIRONMENT_NAME}"
+        else
+            export RESULT_FOLDER_NAME="${ENVIRONMENT_NAME}"
+        fi
+
     # Configure AWS S3 parameters (required) - using local variables for security
     if [[ -z "${ATP_STORAGE_USERNAME}" ]]; then
         echo "❌ ATP_STORAGE_USERNAME is required but not set"
