@@ -149,6 +149,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 - `ATP_STORAGE_USERNAME` - S3 access key
 - `ATP_STORAGE_PASSWORD` - S3 secret key
 - `ENVIRONMENT_NAME` - Environment name
+- `CLUSTER_NAME` - Optional cluster name without dashes (e.g. `atp3dev`). When set, the S3 result/report folder is `<CLUSTER_NAME>-<ENVIRONMENT_NAME>` (e.g. `atp3dev-dev`); otherwise it is `<ENVIRONMENT_NAME>`. A dash in `CLUSTER_NAME` makes initialization fail
 - `ATP_STORAGE_PROVIDER` - Storage type (`aws` or `minio` or `s3`)
 
 ### Optional Variables
