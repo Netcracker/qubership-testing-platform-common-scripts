@@ -21,6 +21,21 @@ function splitPathParts(requestPath) {
 }
 
 // Create steps: Request/Response + Assertion steps
+function mapBrunoStatus(test, assertionsFailed) {
+  const raw = String(test.status || "").toLowerCase();
+  const responseStatus = String(test.response?.status ?? "").toLowerCase();
+  if (raw === "skip" || raw === "skipped" || responseStatus === "skipped") {
+    return "skipped";
+  }
+  if (assertionsFailed) {
+    return "failed";
+  }
+  if (raw === "pass" || raw === "passed") {
+    return "passed";
+  }
+  return "failed";
+}
+
 function createSteps(test, id) {
   const requestFilename = `${id}-request.json`;
   const requestHeadersFilename = `${id}-request-headers.json`;
@@ -145,10 +160,7 @@ try {
 
     const { steps, assertionsFailed, failedAssertions } = createSteps(test, id, timestamp, duration);
 
-    const initialStatus =
-      test.status === "pass" ? "passed" : "failed";
-
-    const finalStatus = assertionsFailed ? "failed" : initialStatus;
+    const finalStatus = mapBrunoStatus(test, assertionsFailed);
 
     const allureResult = {
       uuid: id,
