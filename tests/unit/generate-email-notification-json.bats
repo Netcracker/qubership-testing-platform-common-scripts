@@ -80,6 +80,40 @@ generator_cmd() {
     [ -z "$(find "$OUT_DIR" -name 'test-details.*' -print -quit)" ]
 }
 
+@test "adds run and per-test attributes, keeping only the last attempt of a retried test" {
+    export RUN_ID="RUN-123"
+    printf '{"uuid":"a1","historyId":"hB","name":"B","fullName":"tests/b.spec.ts:3:5","status":"failed","start":20,"stop":25}' >"$ALLURE_DIR/a1-result.json"
+    printf '{"uuid":"a2","historyId":"hB","name":"B","testCaseId":"case-b","fullName":"tests/b.spec.ts:3:5","status":"passed","start":30,"stop":35}' >"$ALLURE_DIR/a2-result.json"
+    printf '{"uuid":"a3","historyId":"hA","name":"A","fullName":"tests/a.spec.ts:1:1","status":"passed","start":10,"stop":15}' >"$ALLURE_DIR/a3-result.json"
+
+    run bash -c "$(generator_cmd)"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.execution_info.testRunExecutionId' "$OUTPUT_FILE")" = "RUN-123" ]
+    [ "$(jq '.test_details | length' "$OUTPUT_FILE")" -eq 2 ]
+    [ "$(jq -r '.test_details[0].test_name' "$OUTPUT_FILE")" = "A" ]
+    [ "$(jq -r '.test_details[0].order' "$OUTPUT_FILE")" = "1" ]
+    [ "$(jq -r '.test_details[0].attempts' "$OUTPUT_FILE")" = "1" ]
+    [ "$(jq -r '.test_details[1].order' "$OUTPUT_FILE")" = "2" ]
+    [ "$(jq -r '.test_details[1].attempts' "$OUTPUT_FILE")" = "2" ]
+    [ "$(jq -r '.test_details[1].testCaseId' "$OUTPUT_FILE")" = "case-b" ]
+    [ "$(jq -r '.test_details[0].testCaseId' "$OUTPUT_FILE")" = "A" ]
+    [ "$(jq -r '.test_details[1].testCasePath' "$OUTPUT_FILE")" = "tests/b.spec.ts" ]
+    [ "$(jq -r '.test_details[1].testRunReportRef' "$OUTPUT_FILE")" = \
+        "https://example.com/Result/unit-test/2026-01-01/12-00-00/allure-results/a2-result.json" ]
+}
+
+@test "uses null for testRunExecutionId and testRunReportRef when they are unknown" {
+    unset RUN_ID
+    export ATP_REPORT_VIEW_UI_URL="Test not started. See logs."
+    printf '{"uuid":"c1","historyId":"hC","name":"C","fullName":"pkg.C","status":"passed","start":1,"stop":2}' >"$ALLURE_DIR/c1-result.json"
+
+    run bash -c "$(generator_cmd)"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.execution_info.testRunExecutionId' "$OUTPUT_FILE")" = "null" ]
+    [ "$(jq -r '.test_details[0].testRunReportRef' "$OUTPUT_FILE")" = "null" ]
+    [ "$(jq -r '.test_details[0].testCasePath' "$OUTPUT_FILE")" = "null" ]
+}
+
 @test "reports a failed build and still writes a minimal FAILED JSON" {
     make_results 3
     # Corrupt one result file so the jq -s pipeline fails.
