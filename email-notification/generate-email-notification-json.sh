@@ -82,6 +82,13 @@ generate_email_notification_json() {
     fi
     TIMESTAMP="${TIMESTAMP:-$(date '+%Y-%m-%d %H:%M:%S UTC')}"
 
+    # Base URL of the uploaded allure-results folder; empty when the test did not start (no valid report URL).
+    local results_base_url=""
+    if [[ "${ATP_REPORT_VIEW_UI_URL}" != Test\ not\ started* ]]; then
+        results_base_url="${ATP_REPORT_VIEW_UI_URL}/Result/${RESULT_FOLDER_NAME:-${ENVIRONMENT_NAME}}/${CURRENT_DATE}/${CURRENT_TIME}/allure-results"
+    fi
+    TEST_RUN_EXECUTION_ID="${RUN_ID:-}"
+
     log_info "Building JSON structure..."
 
     # stream test_details from allure files; never round-trip TEST_DETAILS_STRING
@@ -97,15 +104,23 @@ generate_email_notification_json() {
         {
             find "$allure_results_dir" -maxdepth 1 -name '*-result.json' -print0 |
                 xargs -0 -r cat -- |
-                jq -s '[
+                jq -s --arg results_base "$results_base_url" '[
                   group_by(
                     if (.historyId // "") != "" then .historyId
                     elif (.fullName // "") != "" then .fullName
                     else .uuid end
                   )
+                  | map({
+                      attempts: .,
+                      first_start: (map(.start // 0) | min)
+                    })
+                  | sort_by(.first_start)
+                  | to_entries
                   | .[]
-                  | (max_by(.stop // .start // 0)) as $w
-                  | (length - 1) as $retries
+                  | (.key + 1) as $order
+                  | .value.attempts as $attempts
+                  | ($attempts | max_by(.stop // .start // 0)) as $w
+                  | ($attempts | length) as $n
                   | (
                       if $w.status == "passed" then "PASSED"
                       elif $w.status == "failed" then "FAILED"
@@ -114,11 +129,23 @@ generate_email_notification_json() {
                     ) as $base
                   | {
                       status: (
-                        if $retries == 0 then $base
-                        elif $retries == 1 then "\($base) (1 retry)"
-                        else "\($base) (\($retries) retries)" end
+                        if $n == 1 then $base
+                        elif $n == 2 then "\($base) (1 retry)"
+                        else "\($base) (\($n - 1) retries)" end
                       ),
                       test_name: $w.name,
+                      order: $order,
+                      attempts: $n,
+                      testCaseId: ($w.testCaseId // $w.name),
+                      testCasePath: (
+                        ($w.fullName // "")
+                        | if test(":[0-9]+:[0-9]+$") then sub(":[0-9]+:[0-9]+$"; "") else null end
+                      ),
+                      testRunReportRef: (
+                        if $results_base != "" and ($w.uuid // "") != ""
+                        then "\($results_base)/\($w.uuid)-result.json"
+                        else null end
+                      ),
                       emoji: (
                         if $w.status == "passed" then "✅"
                         elif $w.status == "failed" then "❌"
@@ -153,6 +180,7 @@ generate_email_notification_json() {
             --argjson skipped_count "$TEST_SKIPPED_COUNT" \
             --argjson failure_rate "$TEST_FAILURE_RATE" \
             --argjson coverage "$TEST_COVERAGE" \
+            --arg test_run_execution_id "$TEST_RUN_EXECUTION_ID" \
             --arg execution_date "$EXECUTION_DATE" \
             --arg timestamp "$TIMESTAMP" \
             --arg environment_name "${ENVIRONMENT_NAME:-Unknown}" \
@@ -181,6 +209,7 @@ generate_email_notification_json() {
                 coverage: $coverage
               },
               execution_info: {
+                testRunExecutionId: (if $test_run_execution_id == "" then null else $test_run_execution_id end),
                 execution_date: $execution_date,
                 timestamp: $timestamp,
                 environment_name: $environment_name,
@@ -242,6 +271,7 @@ generate_email_notification_json() {
             --arg execution_date "${EXECUTION_DATE:-$(date '+%Y-%m-%d %H:%M:%S')}" \
             --arg timestamp "${TIMESTAMP:-$(date '+%Y-%m-%d %H:%M:%S UTC')}" \
             --arg environment_name "${ENVIRONMENT_NAME:-Unknown}" \
+            --arg test_run_execution_id "${RUN_ID:-}" \
             '{
               test_results: {
                 overall_status: "FAILED",
@@ -255,6 +285,7 @@ generate_email_notification_json() {
                 coverage: 0
               },
               execution_info: {
+                testRunExecutionId: (if $test_run_execution_id == "" then null else $test_run_execution_id end),
                 execution_date: $execution_date,
                 timestamp: $timestamp,
                 environment_name: $environment_name,
