@@ -82,6 +82,7 @@ The script uses the following environment variables for JSON generation:
     "coverage": 100.00
   },
   "execution_info": {
+    "testRunExecutionId": "RUN-123",
     "execution_date": "2024-01-15 14:30:25",
     "timestamp": "2024-01-15 14:30:25 UTC",
     "env_name": "staging",
@@ -92,6 +93,11 @@ The script uses the following environment variables for JSON generation:
     {
       "status": "PASSED",
       "test_name": "User Login Test",
+      "order": 1,
+      "attempts": 2,
+      "testCaseId": "c1a2b3d4e5f60718293a4b5c6d7e8f90",
+      "testCasePath": "tests/login.spec.ts",
+      "testRunReportRef": "https://reports.example.com/Result/staging/2024-01-15/14-30-25/allure-results/<uuid>-result.json",
       "emoji": "✅"
     }
   ],
@@ -100,6 +106,18 @@ The script uses the following environment variables for JSON generation:
   "status_logic": {}
 }
 ```
+
+Run and per-test attributes:
+
+- `execution_info.testRunExecutionId` is the `RUN_ID` environment variable, or `null` when it is not set.
+- `test_details[].order` is the 1-based position of the test, sorted by the start time of its first attempt.
+- `test_details[].attempts` is the number of attempts, including retries.
+- `test_details[].testCaseId` is the `testCaseId` field of the Allure result, or the test name when the result has
+  none. The source may change once the identifier format is agreed.
+- `test_details[].testCasePath` is the path reported by Playwright, relative to `testDir`. It is `null` when the
+  Allure `fullName` has no `:line:column` suffix, as with Bruno.
+- `test_details[].testRunReportRef` is the URL of the `*-result.json` file of the last attempt, or `null` when the
+  test did not start.
 
 ## Integration with Other Scripts
 
