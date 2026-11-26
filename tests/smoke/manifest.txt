@@ -18,7 +18,7 @@ render-environment-configuration.sh | | render_environment_configuration
 runtime-setup.sh | | setup_runtime_environment
 test-runner-bruno.sh | | run_bruno_from_test_params
 test-runner.sh | | assert_collection_allowed_for_runner run_tests
-upload-monitor.sh | | clear_sensitive_vars final_cleanup finalize_upload generate_result_urls restore_aws_credentials start_inotify_uploader start_sync_uploader start_upload_monitoring sync_directory_to_s3 upload_file_to_s3
+upload-monitor.sh | | _finalize_sync _storage_debug _storage_preflight _storage_s5cmd _storage_uses_endpoint clear_sensitive_vars final_cleanup finalize_upload generate_result_urls log_storage_config restore_aws_credentials start_inotify_uploader start_sync_uploader start_upload_monitoring sync_directory_to_s3 upload_file_to_s3
 lib/collection-runner.sh | | list_bru_run_targets resolve_folders run_bru run_collection_body wait_for_collection_slot write_allure_placeholder
 tools/b3_trace.sh | | _b3_random_hex compose_b3_trace_id generate_b3_span_id generate_b3_testcase_id
 tools/bru_tools.sh | | bruno_collection_display_name bruno_collection_file_slug discover_bruno_collections extract_bruno_collections extract_bruno_folders extract_bruno_tags

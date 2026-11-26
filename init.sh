@@ -26,7 +26,10 @@ init_environment() {
 
     if storage_enabled; then
         export ATP_STORAGE_ENABLED=true
-        export ATP_STORAGE_PROVIDER="${ATP_STORAGE_PROVIDER:-minio}"
+        # Normalize the provider: trim whitespace, lower-case ("S3 " -> "s3")
+        local _provider="${ATP_STORAGE_PROVIDER:-minio}"
+        _provider="${_provider//[[:space:]]/}"
+        export ATP_STORAGE_PROVIDER="${_provider,,}"
 
         # Store credentials in local variables (not exported to environment)
         _LOCAL_S3_KEY="$ATP_STORAGE_USERNAME"
@@ -34,11 +37,17 @@ init_environment() {
         export AWS_ACCESS_KEY_ID="$_LOCAL_S3_KEY"
         export AWS_SECRET_ACCESS_KEY="$_LOCAL_S3_SECRET"
 
-        # Configure additional s5cmd settings for MinIO only
+        # Configure additional s5cmd settings for S3-compatible endpoints
         if [[ "${ATP_STORAGE_PROVIDER}" == "minio" || "${ATP_STORAGE_PROVIDER}" == "s3" ]]; then
             export AWS_ENDPOINT_URL="${ATP_STORAGE_SERVER_URL}"
             export AWS_REGION="${ATP_STORAGE_REGION:-}"           # Required by s5cmd even for MinIO
             export AWS_NO_VERIFY_SSL="true"           # Optional: disable SSL verification
+        elif [[ "${ATP_STORAGE_PROVIDER}" == "gcs" ]]; then
+            # Google Cloud Storage via the S3-compatible API with HMAC keys.
+            # "auto" avoids the bucket-region lookup (GetBucketLocation returns 403 for HMAC users).
+            export AWS_ENDPOINT_URL="${ATP_STORAGE_SERVER_URL}"
+            export AWS_REGION="${ATP_STORAGE_REGION:-auto}"
+            export AWS_NO_VERIFY_SSL="true"
         fi
     else
         export ATP_STORAGE_ENABLED=false
